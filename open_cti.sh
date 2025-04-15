@@ -183,33 +183,37 @@ create_docker_compose() {
     cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
 version: '3'
 services:
-  opencti:
-    image: opencti/platform:latest
-    environment:
-      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
     ports:
-      - "8080:8080"
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
+      - thread_pool.search.queue_size=5000
+      - xpack.security.enabled=false
+      - cluster.name=opencti
+      - http.host=0.0.0.0
+      - transport.host=0.0.0.0
+      - bootstrap.memory_lock=true
     deploy:
       resources:
         limits:
-          memory: ${NODE_MEMORY}M
-    depends_on:
-      - redis
-      - elasticsearch
-      - minio
-      - rabbitmq
-
-  worker:
-    image: opencti/worker:latest
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-    depends_on:
-      - redis
-      - elasticsearch
-      - minio
-      - rabbitmq
+          memory: ${ES_MEMORY}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: redis:6.2
@@ -220,33 +224,66 @@ services:
       resources:
         limits:
           memory: ${REDIS_MEMORY}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
-    ports:
-      - "9200:9200"
+  opencti:
+    image: opencti/platform:latest
     environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
-      - thread_pool.search.queue_size=5000
+      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
+      - OPENCTI_URL=http://localhost:8080
+      - OPENCTI_ADMIN_EMAIL=admin@opencti.io
+      - OPENCTI_ADMIN_PASSWORD=\${OPENCTI_ADMIN_PASSWORD}
+      - OPENCTI_ADMIN_TOKEN=\${OPENCTI_ADMIN_TOKEN}
+      - ELASTIC_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=\${REDIS_PASSWORD}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USERNAME=opencti
+      - RABBITMQ_PASSWORD=\${RABBITMQ_DEFAULT_PASS}
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=\${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=\${MINIO_ROOT_PASSWORD}
+    ports:
+      - "8080:8080"
     deploy:
       resources:
         limits:
-          memory: ${ES_MEMORY}
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
+          memory: ${NODE_MEMORY}M
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
 
   minio:
     image: minio/minio
     ports:
       - "9000:9000"
     command: server /data
+    environment:
+      - MINIO_ROOT_USER=\${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=\${MINIO_ROOT_PASSWORD}
+    volumes:
+      - s3data:/data
     deploy:
       resources:
         limits:
           memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3.9-management
@@ -258,10 +295,23 @@ services:
       - RABBITMQ_DEFAULT_PASS=\${RABBITMQ_DEFAULT_PASS}
       - RABBITMQ_MAX_MESSAGE_SIZE=536870912
       - RABBITMQ_CONSUMER_TIMEOUT=86400000
+    volumes:
+      - amqpdata:/var/lib/rabbitmq
     deploy:
       resources:
         limits:
           memory: 2G
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  esdata:
+  redisdata:
+  s3data:
+  amqpdata:
 EOL
     log_message "${GREEN}docker-compose.yml created with memory limits${NC}"
 }
@@ -288,24 +338,35 @@ verify_ports() {
 # Function to check service health
 check_service_health() {
     log_message "${YELLOW}Checking service health...${NC}"
-    local max_attempts=30
+    local max_attempts=60  # Increased timeout
     local attempt=1
-    local opencti_healthy=0
+    local services_healthy=0
 
     while [ $attempt -le $max_attempts ]; do
-        if curl -s http://localhost:8080 > /dev/null; then
-            opencti_healthy=1
-            break
+        # Check Elasticsearch health
+        if ! curl -s "http://localhost:9200/_cluster/health" | grep -q '"status":"green\|yellow"'; then
+            log_message "${YELLOW}Waiting for Elasticsearch to be ready (attempt $attempt/$max_attempts)...${NC}"
+            sleep 10
+            ((attempt++))
+            continue
         fi
-        log_message "${YELLOW}Waiting for OpenCTI to start (attempt $attempt/$max_attempts)...${NC}"
-        sleep 10
-        ((attempt++))
+
+        # Check OpenCTI health
+        if ! curl -s http://localhost:8080 > /dev/null; then
+            log_message "${YELLOW}Waiting for OpenCTI to start (attempt $attempt/$max_attempts)...${NC}"
+            sleep 10
+            ((attempt++))
+            continue
+        fi
+
+        services_healthy=1
+        break
     done
 
-    if [ $opencti_healthy -eq 0 ]; then
-        log_message "${RED}OpenCTI failed to start within the expected time${NC}"
+    if [ $services_healthy -eq 0 ]; then
+        log_message "${RED}Services failed to start within the expected time${NC}"
         log_message "${YELLOW}Checking container logs...${NC}"
-        docker-compose logs opencti
+        docker-compose logs
         exit 1
     fi
 }
