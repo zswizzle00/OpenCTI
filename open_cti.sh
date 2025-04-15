@@ -187,6 +187,8 @@ services:
     image: opencti/platform:latest
     environment:
       - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
+    ports:
+      - "8080:8080"
     deploy:
       resources:
         limits:
@@ -211,6 +213,8 @@ services:
 
   redis:
     image: redis:6.2
+    ports:
+      - "6379:6379"
     command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru
     deploy:
       resources:
@@ -219,6 +223,8 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    ports:
+      - "9200:9200"
     environment:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
@@ -234,6 +240,8 @@ services:
 
   minio:
     image: minio/minio
+    ports:
+      - "9000:9000"
     command: server /data
     deploy:
       resources:
@@ -242,6 +250,9 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.9-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=opencti
       - RABBITMQ_DEFAULT_PASS=\${RABBITMQ_DEFAULT_PASS}
@@ -253,6 +264,50 @@ services:
           memory: 2G
 EOL
     log_message "${GREEN}docker-compose.yml created with memory limits${NC}"
+}
+
+# Function to verify port availability
+verify_ports() {
+    log_message "${YELLOW}Verifying port availability...${NC}"
+    local ports=("8080" "6379" "9200" "9000" "5672" "15672")
+    local port_in_use=0
+
+    for port in "${ports[@]}"; do
+        if lsof -i :$port > /dev/null 2>&1; then
+            log_message "${RED}Port $port is already in use${NC}"
+            port_in_use=1
+        fi
+    done
+
+    if [ $port_in_use -eq 1 ]; then
+        log_message "${RED}Some required ports are already in use. Please free these ports and try again.${NC}"
+        exit 1
+    fi
+}
+
+# Function to check service health
+check_service_health() {
+    log_message "${YELLOW}Checking service health...${NC}"
+    local max_attempts=30
+    local attempt=1
+    local opencti_healthy=0
+
+    while [ $attempt -le $max_attempts ]; do
+        if curl -s http://localhost:8080 > /dev/null; then
+            opencti_healthy=1
+            break
+        fi
+        log_message "${YELLOW}Waiting for OpenCTI to start (attempt $attempt/$max_attempts)...${NC}"
+        sleep 10
+        ((attempt++))
+    done
+
+    if [ $opencti_healthy -eq 0 ]; then
+        log_message "${RED}OpenCTI failed to start within the expected time${NC}"
+        log_message "${YELLOW}Checking container logs...${NC}"
+        docker-compose logs opencti
+        exit 1
+    fi
 }
 
 # Main function to coordinate the setup
@@ -286,13 +341,18 @@ main() {
     create_env_file
     create_docker_compose
 
+    # Verify ports before starting
+    verify_ports
+
     log_message "${YELLOW}Starting OpenCTI...${NC}"
     cd "$INSTALL_DIR/opencti"
     docker-compose up -d || { log_message "${RED}Failed to start OpenCTI${NC}"; exit 1; }
 
+    # Check service health
+    check_service_health
+
     log_message "${GREEN}OpenCTI installation completed!${NC}"
-    log_message "${GREEN}Please wait a few minutes for all services to start up.${NC}"
-    log_message "${GREEN}You can access OpenCTI at: http://localhost:8080${NC}"
+    log_message "${GREEN}OpenCTI is now accessible at: http://localhost:8080${NC}"
     log_message "${YELLOW}Default credentials:${NC}"
     log_message "Email: admin@opencti.io"
     log_message "Password: (Generated in the .env file)"
