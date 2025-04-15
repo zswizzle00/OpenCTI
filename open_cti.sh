@@ -18,7 +18,7 @@ SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
 # Memory configurations
-NODE_MEMORY="8G"  # Platform memory
+NODE_MEMORY="8192"  # Platform memory in MB (8GB)
 ES_MEMORY="4G"    # ElasticSearch memory
 REDIS_MEMORY="8G" # Redis memory (for 2M stream limit)
 
@@ -192,7 +192,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${NODE_MEMORY}
+          memory: ${NODE_MEMORY}M
     depends_on:
       - redis
       - elasticsearch
