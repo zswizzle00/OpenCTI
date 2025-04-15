@@ -10,6 +10,8 @@ A bash script to automate the installation and configuration of OpenCTI, an open
 - Environment file configuration
 - Comprehensive logging
 - Flexible installation options
+- Memory configuration for all components
+- System optimization for ElasticSearch
 
 ## Prerequisites
 
@@ -33,6 +35,9 @@ The script supports several command-line options:
 - `-d, --directory <path>`: Specify the installation directory (default: /opt/opencti)
 - `-s, --skip-docker`: Skip Docker and Docker Compose installation
 - `-e, --env-only`: Only generate the .env file, skip installation steps
+- `-n, --node-memory <size>`: Set NodeJS memory limit (default: 8G)
+- `-m, --es-memory <size>`: Set ElasticSearch memory limit (default: 4G)
+- `-r, --redis-memory <size>`: Set Redis memory limit (default: 8G)
 
 ## Usage Examples
 
@@ -56,17 +61,44 @@ sudo ./open_cti.sh -s
 sudo ./open_cti.sh -e
 ```
 
+5. Custom memory configuration:
+```bash
+sudo ./open_cti.sh -n 12G -m 6G -r 10G
+```
+
 ## Installation Process
 
 The script performs the following steps:
 
 1. Checks for root privileges
-2. Installs prerequisites (if not skipped)
-3. Installs Docker and Docker Compose (if not skipped)
-4. Creates the installation directory
-5. Clones the OpenCTI repository
-6. Generates secure passwords and creates the .env file
-7. Starts the OpenCTI services
+2. Configures system settings for ElasticSearch
+3. Installs prerequisites (if not skipped)
+4. Installs Docker and Docker Compose (if not skipped)
+5. Creates the installation directory
+6. Clones the OpenCTI repository
+7. Generates secure passwords and creates the .env file
+8. Creates docker-compose.yml with memory limits
+9. Starts the OpenCTI services
+
+## Memory Configuration
+
+The script configures memory limits for all components:
+
+- OpenCTI Platform (NodeJS): 8GB default
+- Worker: 2GB
+- Redis: 8GB default (supports 2M stream limit)
+- ElasticSearch: 4GB default
+- MinIO: 1GB
+- RabbitMQ: 2GB
+
+These limits can be customized using the command-line options.
+
+## System Configuration
+
+The script automatically configures:
+- `vm.max_map_count=1048575` for ElasticSearch
+- Makes the setting persistent in `/etc/sysctl.conf`
+- Applies system settings immediately
 
 ## Post-Installation
 
@@ -159,6 +191,8 @@ The script logs all operations to `/var/log/opencti_install.log` for debugging p
 - The script requires root privileges for system-level installations
 - Default credentials should be changed immediately after installation
 - The .env file contains sensitive information and should be properly secured
+- Memory limits are set to prevent resource exhaustion
+- System settings are optimized for ElasticSearch performance
 
 ## Troubleshooting
 
@@ -167,6 +201,8 @@ If you encounter issues:
 2. Ensure all prerequisites are met
 3. Verify Docker and Docker Compose are properly installed
 4. Check system resources (memory and disk space)
+5. Verify system settings for ElasticSearch
+6. Check memory limits in docker-compose.yml
 
 ## License
 

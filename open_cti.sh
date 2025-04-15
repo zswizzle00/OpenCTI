@@ -17,6 +17,11 @@ INSTALL_DIR="/opt/opencti"
 SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
+# Memory configurations
+NODE_MEMORY="8G"  # Platform memory
+ES_MEMORY="4G"    # ElasticSearch memory
+REDIS_MEMORY="8G" # Redis memory (for 2M stream limit)
+
 # Function to log messages
 log_message() {
     echo -e "$1" | tee -a "$LOG_FILE"
@@ -30,6 +35,9 @@ show_help() {
     echo "  -d, --directory <path>    Specify the installation directory (default: /opt/opencti)"
     echo "  -s, --skip-docker         Skip Docker and Docker Compose installation"
     echo "  -e, --env-only            Only generate the .env file, skip installation steps"
+    echo "  -n, --node-memory <size>  Set NodeJS memory limit (default: 8G)"
+    echo "  -m, --es-memory <size>    Set ElasticSearch memory limit (default: 4G)"
+    echo "  -r, --redis-memory <size> Set Redis memory limit (default: 8G)"
     exit 0
 }
 
@@ -51,6 +59,18 @@ while [[ $# -gt 0 ]]; do
             ENV_FILE_ONLY=true
             shift
             ;;
+        -n|--node-memory)
+            NODE_MEMORY="$2"
+            shift 2
+            ;;
+        -m|--es-memory)
+            ES_MEMORY="$2"
+            shift 2
+            ;;
+        -r|--redis-memory)
+            REDIS_MEMORY="$2"
+            shift 2
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
             show_help
@@ -69,6 +89,22 @@ fi
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+# Configure system settings
+configure_system() {
+    log_message "${YELLOW}Configuring system settings...${NC}"
+    
+    # Set vm.max_map_count for ElasticSearch
+    sysctl -w vm.max_map_count=1048575 || { log_message "${RED}Failed to set vm.max_map_count${NC}"; exit 1; }
+    
+    # Make vm.max_map_count persistent
+    if ! grep -q "vm.max_map_count=1048575" /etc/sysctl.conf; then
+        echo "vm.max_map_count=1048575" >> /etc/sysctl.conf
+    fi
+    
+    # Apply sysctl changes
+    sysctl -p || { log_message "${RED}Failed to apply sysctl changes${NC}"; exit 1; }
 }
 
 # Install required packages
@@ -115,24 +151,108 @@ OPENCTI_ADMIN_EMAIL=admin@opencti.io
 OPENCTI_ADMIN_PASSWORD=$(generate_password)
 OPENCTI_ADMIN_TOKEN=$(generate_password)
 OPENCTI_BASE_URL=http://localhost:8080
+NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
 
 # RabbitMQ Configuration
 RABBITMQ_DEFAULT_USER=opencti
 RABBITMQ_DEFAULT_PASS=$(generate_password)
+RABBITMQ_MAX_MESSAGE_SIZE=536870912
+RABBITMQ_CONSUMER_TIMEOUT=86400000
 
 # Redis Configuration
 REDIS_PASSWORD=$(generate_password)
+REDIS_MEMORY_LIMIT=${REDIS_MEMORY}
 
 # Elasticsearch Configuration
 ELASTICSEARCH_URL=http://elasticsearch:9200
 ELASTICSEARCH_USERNAME=elastic
 ELASTICSEARCH_PASSWORD=$(generate_password)
+ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
+ELASTICSEARCH_THREAD_POOL_SEARCH_QUEUE_SIZE=5000
 
 # MinIO Configuration
 MINIO_ROOT_USER=opencti
 MINIO_ROOT_PASSWORD=$(generate_password)
 EOL
     log_message "${GREEN}.env file created at $INSTALL_DIR/opencti/.env${NC}"
+}
+
+# Create docker-compose.yml with memory limits
+create_docker_compose() {
+    log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
+    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
+version: '3'
+services:
+  opencti:
+    image: opencti/platform:latest
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
+    deploy:
+      resources:
+        limits:
+          memory: ${NODE_MEMORY}
+    depends_on:
+      - redis
+      - elasticsearch
+      - minio
+      - rabbitmq
+
+  worker:
+    image: opencti/worker:latest
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    depends_on:
+      - redis
+      - elasticsearch
+      - minio
+      - rabbitmq
+
+  redis:
+    image: redis:6.2
+    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY}
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
+      - thread_pool.search.queue_size=5000
+    deploy:
+      resources:
+        limits:
+          memory: ${ES_MEMORY}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  minio:
+    image: minio/minio
+    command: server /data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=opencti
+      - RABBITMQ_DEFAULT_PASS=\${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_MAX_MESSAGE_SIZE=536870912
+      - RABBITMQ_CONSUMER_TIMEOUT=86400000
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+EOL
+    log_message "${GREEN}docker-compose.yml created with memory limits${NC}"
 }
 
 # Main function to coordinate the setup
@@ -143,6 +263,7 @@ main() {
         exit 0
     fi
 
+    configure_system
     install_prerequisites
 
     if ! $SKIP_DOCKER_INSTALL; then
@@ -163,6 +284,7 @@ main() {
     fi
 
     create_env_file
+    create_docker_compose
 
     log_message "${YELLOW}Starting OpenCTI...${NC}"
     cd "$INSTALL_DIR/opencti"
