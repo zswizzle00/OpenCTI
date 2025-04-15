@@ -78,6 +78,77 @@ After installation:
 - It is strongly recommended to change the default credentials after first login
 - Services may take a few minutes to fully start up
 
+## Intezer Sandbox Integration
+
+The platform includes an integration with Intezer Sandbox for automated malware analysis. To set up the integration:
+
+1. Run the Intezer setup script:
+```bash
+./intezer.sh
+```
+
+2. Configure the integration:
+   - Navigate to `connectors/intezer-sandbox`
+   - Edit the `.env` file with your credentials:
+     - `OPENCTI_TOKEN`: Your OpenCTI API token
+     - `INTEZER_API_KEY`: Your Intezer API key
+     - Other settings can be customized as needed
+
+3. Start the connector:
+```bash
+cd connectors/intezer-sandbox
+docker-compose up -d
+```
+
+4. Monitor the integration:
+```bash
+docker-compose logs -f
+```
+
+### Intezer Integration Features
+- Automated malware analysis of suspicious files
+- Integration with OpenCTI's threat intelligence platform
+- Real-time analysis results
+- Configurable confidence levels
+- Detailed logging and monitoring
+
+## CrowdStrike Endpoint Security Integration
+
+The platform includes an integration with CrowdStrike Endpoint Security for automated IOC management. To set up the integration:
+
+1. Run the CrowdStrike setup script:
+```bash
+./crowdstrike.sh
+```
+
+2. Configure the integration:
+   - Navigate to `connectors/crowdstrike-endpoint-security`
+   - Edit the `.env` file with your credentials:
+     - `OPENCTI_TOKEN`: Your OpenCTI API token
+     - `CONNECTOR_ID`: A unique identifier for this connector
+     - `CROWDSTRIKE_CLIENT_ID`: Your CrowdStrike API client ID
+     - `CROWDSTRIKE_CLIENT_SECRET`: Your CrowdStrike API client secret
+     - Other settings can be customized as needed
+
+3. Start the connector:
+```bash
+cd connectors/crowdstrike-endpoint-security
+docker-compose up -d
+```
+
+4. Monitor the integration:
+```bash
+docker-compose logs -f
+```
+
+### CrowdStrike Integration Features
+- Automated IOC management between OpenCTI and CrowdStrike
+- Support for various IOC types (domains, IPs, hashes)
+- Configurable permanent deletion behavior
+- Mobile device support (optional)
+- Real-time synchronization
+- Detailed logging and monitoring
+
 ## Logging
 
 The script logs all operations to `/var/log/opencti_install.log` for debugging purposes.
