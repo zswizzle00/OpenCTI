@@ -145,19 +145,44 @@ install_prerequisites() {
     # Check if Java is already installed
     if ! command_exists java; then
         # Add OpenJDK repository
-        apt-get install -y openjdk-11-jdk >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to install Java${NC}"; exit 1; }
+        apt-get install -y software-properties-common >> "$LOG_FILE" 2>&1
+        add-apt-repository -y ppa:openjdk-r/ppa >> "$LOG_FILE" 2>&1
+        apt-get update >> "$LOG_FILE" 2>&1
+        
+        # Install OpenJDK 11
+        apt-get install -y openjdk-11-jdk >> "$LOG_FILE" 2>&1 || { 
+            log_message "${RED}Failed to install OpenJDK 11, trying alternative method...${NC}"
+            # Alternative method using official Oracle repository
+            apt-get install -y wget >> "$LOG_FILE" 2>&1
+            wget -qO - https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | apt-key add - >> "$LOG_FILE" 2>&1
+            echo "deb https://adoptopenjdk.jfrog.io/adoptopenjdk/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptopenjdk.list >> "$LOG_FILE" 2>&1
+            apt-get update >> "$LOG_FILE" 2>&1
+            apt-get install -y adoptopenjdk-11-hotspot >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to install Java${NC}"; exit 1; }
+        }
         
         # Set JAVA_HOME
-        export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+        if [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
+            export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+        elif [ -d "/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64" ]; then
+            export JAVA_HOME="/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64"
+        else
+            export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+        fi
+        
         echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
+        echo "PATH=$PATH:$JAVA_HOME/bin" >> /etc/environment
         
         # Verify Java installation
+        source /etc/environment
         java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
         if [ -z "$java_version" ]; then
             log_message "${RED}Java installation failed${NC}"
+            log_message "${YELLOW}Attempting to find Java installation...${NC}"
+            find /usr/lib/jvm -name java -type f -exec {} -version \; 2>&1
             exit 1
         else
             log_message "${GREEN}Java version $java_version installed successfully${NC}"
+            log_message "${GREEN}JAVA_HOME set to: $JAVA_HOME${NC}"
         fi
     else
         log_message "${GREEN}Java is already installed${NC}"
@@ -168,7 +193,16 @@ install_prerequisites() {
     # Verify Java memory settings
     log_message "${YELLOW}Verifying Java memory settings...${NC}"
     if [ -z "$JAVA_HOME" ]; then
-        export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+        if [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
+            export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+        elif [ -d "/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64" ]; then
+            export JAVA_HOME="/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64"
+        else
+            export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+        fi
+        echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
+        echo "PATH=$PATH:$JAVA_HOME/bin" >> /etc/environment
+        source /etc/environment
     fi
     
     # Check if JAVA_OPTS is set
