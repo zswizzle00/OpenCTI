@@ -91,7 +91,7 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Configure system settings
+# Function to configure system settings
 configure_system() {
     log_message "${YELLOW}Configuring system settings...${NC}"
     
@@ -102,9 +102,31 @@ configure_system() {
     if ! grep -q "vm.max_map_count=1048575" /etc/sysctl.conf; then
         echo "vm.max_map_count=1048575" >> /etc/sysctl.conf
     fi
-    
+
+    # Set swappiness to 1 to reduce swapping
+    sysctl -w vm.swappiness=1 || { log_message "${RED}Failed to set vm.swappiness${NC}"; exit 1; }
+    if ! grep -q "vm.swappiness=1" /etc/sysctl.conf; then
+        echo "vm.swappiness=1" >> /etc/sysctl.conf
+    fi
+
+    # Set overcommit memory to 1
+    sysctl -w vm.overcommit_memory=1 || { log_message "${RED}Failed to set vm.overcommit_memory${NC}"; exit 1; }
+    if ! grep -q "vm.overcommit_memory=1" /etc/sysctl.conf; then
+        echo "vm.overcommit_memory=1" >> /etc/sysctl.conf
+    fi
+
     # Apply sysctl changes
     sysctl -p || { log_message "${RED}Failed to apply sysctl changes${NC}"; exit 1; }
+
+    # Create swap file if it doesn't exist
+    if [ ! -f /swapfile ]; then
+        log_message "${YELLOW}Creating swap file...${NC}"
+        fallocate -l 4G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
 }
 
 # Install required packages
@@ -230,6 +252,13 @@ services:
       - http.host=0.0.0.0
       - transport.host=0.0.0.0
       - bootstrap.memory_lock=true
+      - action.destructive_requires_name=true
+      - indices.query.bool.max_clause_count=1024
+      - indices.memory.index_buffer_size=10%
+      - indices.breaker.total.limit=50%
+      - indices.breaker.fielddata.limit=40%
+      - indices.breaker.request.limit=40%
+      - indices.breaker.total.use_real_memory=false
     deploy:
       resources:
         limits:
@@ -250,6 +279,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:6.2
@@ -398,7 +428,7 @@ verify_ports() {
 # Function to check service health
 check_service_health() {
     log_message "${YELLOW}Checking service health...${NC}"
-    local max_attempts=60  # Increased timeout
+    local max_attempts=60
     local attempt=1
     local services_healthy=0
 
@@ -406,6 +436,11 @@ check_service_health() {
         # Check Elasticsearch health
         if ! curl -s "http://localhost:9200/_cluster/health" | grep -q '"status":"green\|yellow"'; then
             log_message "${YELLOW}Waiting for Elasticsearch to be ready (attempt $attempt/$max_attempts)...${NC}"
+            # Check Elasticsearch logs if it's not responding
+            if [ $attempt -gt 5 ]; then
+                log_message "${YELLOW}Checking Elasticsearch logs...${NC}"
+                docker-compose logs elasticsearch
+            fi
             sleep 10
             ((attempt++))
             continue
