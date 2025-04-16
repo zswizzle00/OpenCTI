@@ -299,22 +299,29 @@ check_system_memory() {
         exit 1
     fi
     
-    # Adjust memory allocations based on available system memory
-    if [ "$total_mem" -lt 16384 ]; then  # Less than 16GB
-        NODE_MEMORY="3072"  # 3GB
-        ES_MEMORY="2g"     # 2GB
-        REDIS_MEMORY="1g"  # 1GB
-        log_message "${YELLOW}Limited memory mode: Adjusting service memory allocations${NC}"
-    elif [ "$total_mem" -lt 32768 ]; then  # Less than 32GB
-        NODE_MEMORY="4096"  # 4GB
-        ES_MEMORY="4g"     # 4GB
-        REDIS_MEMORY="2g"  # 2GB
-        log_message "${YELLOW}Standard memory mode: Using default allocations${NC}"
-    else  # 32GB or more
-        NODE_MEMORY="8192"  # 8GB
-        ES_MEMORY="8g"     # 8GB
-        REDIS_MEMORY="4g"  # 4GB
-        log_message "${GREEN}High memory mode: Using increased allocations${NC}"
+    # Calculate safe memory limits (leave 2GB for system)
+    local safe_mem=$((total_mem - 2048))
+    local es_mem=$((safe_mem * 40 / 100))  # 40% for Elasticsearch
+    local node_mem=$((safe_mem * 30 / 100))  # 30% for Node
+    local redis_mem=$((safe_mem * 10 / 100))  # 10% for Redis
+    
+    # Convert to appropriate units
+    if [ "$es_mem" -ge 1024 ]; then
+        ES_MEMORY="${es_mem}m"
+    else
+        ES_MEMORY="1g"  # Minimum 1GB
+    fi
+    
+    if [ "$node_mem" -ge 1024 ]; then
+        NODE_MEMORY="${node_mem}"
+    else
+        NODE_MEMORY="1024"  # Minimum 1GB
+    fi
+    
+    if [ "$redis_mem" -ge 512 ]; then
+        REDIS_MEMORY="${redis_mem}m"
+    else
+        REDIS_MEMORY="512m"  # Minimum 512MB
     fi
     
     # Export memory variables
@@ -322,21 +329,11 @@ check_system_memory() {
     export ES_MEMORY
     export REDIS_MEMORY
     
-    # Verify Java can handle the allocated memory
-    if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
-        log_message "${RED}Java cannot handle the allocated Elasticsearch memory${NC}"
-        log_message "${YELLOW}Reducing Elasticsearch memory allocation${NC}"
-        ES_MEMORY="2g"  # Fallback to 2GB
-        export ES_MEMORY
-        if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
-            log_message "${RED}Java cannot handle even the minimum memory allocation${NC}"
-            exit 1
-        fi
-    fi
-    
     log_message "${GREEN}Memory configuration:${NC}"
-    log_message "OpenCTI: ${NODE_MEMORY}M"
+    log_message "Total system memory: ${total_mem}MB"
+    log_message "Safe memory limit: ${safe_mem}MB"
     log_message "Elasticsearch: ${ES_MEMORY}"
+    log_message "Node: ${NODE_MEMORY}M"
     log_message "Redis: ${REDIS_MEMORY}"
 }
 
@@ -384,6 +381,18 @@ services:
       - path.repo=/usr/share/elasticsearch/data/backup
       - discovery.seed_hosts=opencti-es
       - cluster.routing.allocation.disk.threshold_enabled=false
+      - bootstrap.system_call_filter=false
+      - discovery.zen.minimum_master_nodes=1
+      - discovery.zen.ping.unicast.hosts=elasticsearch
+      - discovery.zen.ping_timeout=30s
+      - discovery.initial_state_timeout=30s
+      - cluster.publish.timeout=30s
+      - cluster.routing.allocation.node_initial_primaries_recoveries=4
+      - cluster.routing.allocation.node_concurrent_recoveries=2
+      - cluster.routing.allocation.cluster_concurrent_rebalance=2
+      - cluster.routing.allocation.balance.shard=0.45f
+      - cluster.routing.allocation.balance.index=0.55f
+      - cluster.routing.allocation.balance.threshold=1.0f
     deploy:
       resources:
         limits:
