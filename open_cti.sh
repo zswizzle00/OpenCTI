@@ -351,7 +351,7 @@ create_docker_compose() {
     fi
     
     # Create docker-compose.yml with proper variable substitution
-    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
+    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << 'EOL'
 version: '3'
 services:
   elasticsearch:
@@ -400,7 +400,7 @@ services:
     volumes:
       - esdata:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status.*green\\|yellow'"]
       interval: 30s
       timeout: 20s
       retries: 10
