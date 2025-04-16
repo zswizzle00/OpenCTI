@@ -18,9 +18,9 @@ SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
 # Memory configurations (in MB)
-NODE_MEMORY="1536M"  # Platform memory 1.5GB
-ES_MEMORY="3G"     # ElasticSearch memory 3GB
-REDIS_MEMORY="512M"  # Redis memory 512MB
+NODE_MEMORY="1024M"  # Platform memory 1GB
+ES_MEMORY="2G"     # ElasticSearch memory 2GB
+REDIS_MEMORY="256M"  # Redis memory 256MB
 
 # Function to log messages
 log_message() {
@@ -122,6 +122,20 @@ configure_system() {
     sysctl -w vm.overcommit_memory=1 || { log_message "${RED}Failed to set vm.overcommit_memory${NC}"; exit 1; }
     if ! grep -q "vm.overcommit_memory=1" /etc/sysctl.conf; then
         echo "vm.overcommit_memory=1" >> /etc/sysctl.conf
+    fi
+
+    # Set overcommit ratio to 50%
+    sysctl -w vm.overcommit_ratio=50 || { log_message "${RED}Failed to set vm.overcommit_ratio${NC}"; exit 1; }
+    if ! grep -q "vm.overcommit_ratio=50" /etc/sysctl.conf; then
+        echo "vm.overcommit_ratio=50" >> /etc/sysctl.conf
+    fi
+
+    # Set min_free_kbytes to 1% of total memory
+    local total_mem_kb=$(free -k | awk '/^Mem:/{print $2}')
+    local min_free_kb=$((total_mem_kb / 100))
+    sysctl -w vm.min_free_kbytes=$min_free_kb || { log_message "${RED}Failed to set vm.min_free_kbytes${NC}"; exit 1; }
+    if ! grep -q "vm.min_free_kbytes=$min_free_kb" /etc/sysctl.conf; then
+        echo "vm.min_free_kbytes=$min_free_kb" >> /etc/sysctl.conf
     fi
 
     # Apply sysctl changes
@@ -325,8 +339,8 @@ services:
       - "9200:9200"
     environment:
       - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY} -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=75 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/usr/share/elasticsearch/data/heapdump.hprof
-      - thread_pool.search.queue_size=1000
+      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY} -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=75 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/usr/share/elasticsearch/data/heapdump.hprof -XX:+UseStringDeduplication -XX:+OptimizeStringConcat -XX:+UseCompressedOops -XX:+UseCompressedClassPointers
+      - thread_pool.search.queue_size=500
       - xpack.security.enabled=false
       - cluster.name=opencti
       - http.host=0.0.0.0
@@ -335,9 +349,9 @@ services:
       - action.destructive_requires_name=true
       - indices.query.bool.max_clause_count=1024
       - indices.memory.index_buffer_size=5%
-      - indices.breaker.total.limit=40%
-      - indices.breaker.fielddata.limit=30%
-      - indices.breaker.request.limit=30%
+      - indices.breaker.total.limit=30%
+      - indices.breaker.fielddata.limit=20%
+      - indices.breaker.request.limit=20%
       - indices.breaker.total.use_real_memory=false
       - node.name=opencti-es
       - cluster.initial_master_nodes=opencti-es
@@ -355,17 +369,17 @@ services:
       - discovery.zen.ping_timeout=30s
       - discovery.initial_state_timeout=30s
       - cluster.publish.timeout=30s
-      - cluster.routing.allocation.node_initial_primaries_recoveries=2
+      - cluster.routing.allocation.node_initial_primaries_recoveries=1
       - cluster.routing.allocation.node_concurrent_recoveries=1
       - cluster.routing.allocation.cluster_concurrent_rebalance=1
       - cluster.routing.allocation.balance.shard=0.45f
       - cluster.routing.allocation.balance.index=0.55f
       - cluster.routing.allocation.balance.threshold=1.0f
-      - indices.recovery.max_bytes_per_sec=50mb
-      - indices.recovery.concurrent_streams=2
-      - indices.recovery.concurrent_small_file_streams=2
-      - indices.recovery.max_concurrent_file_chunks=2
-      - indices.recovery.max_concurrent_operations=2
+      - indices.recovery.max_bytes_per_sec=25mb
+      - indices.recovery.concurrent_streams=1
+      - indices.recovery.concurrent_small_file_streams=1
+      - indices.recovery.max_concurrent_file_chunks=1
+      - indices.recovery.max_concurrent_operations=1
     deploy:
       resources:
         limits:
@@ -395,13 +409,13 @@ services:
     image: redis:6.2
     ports:
       - "6379:6379"
-    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru --maxmemory-samples 10 --save "" --appendonly no
+    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru --maxmemory-samples 10 --save "" --appendonly no --maxmemory-policy volatile-lru --activedefrag no
     deploy:
       resources:
         limits:
           memory: ${REDIS_MEMORY}
         reservations:
-          memory: 256M
+          memory: 128M
     volumes:
       - redisdata:/data
     healthcheck:
@@ -413,7 +427,7 @@ services:
   opencti:
     image: opencti/platform:latest
     environment:
-      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY} --optimize-for-size --max-semi-space-size=128
+      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY} --optimize-for-size --max-semi-space-size=64 --max-executable-size=128 --max-old-space-size=1024
       - OPENCTI_URL=http://localhost:8080
       - OPENCTI_ADMIN_EMAIL=admin@opencti.io
       - OPENCTI_ADMIN_PASSWORD=\${OPENCTI_ADMIN_PASSWORD}
@@ -434,7 +448,7 @@ services:
         limits:
           memory: ${NODE_MEMORY}
         reservations:
-          memory: 768M
+          memory: 512M
     depends_on:
       elasticsearch:
         condition: service_healthy
