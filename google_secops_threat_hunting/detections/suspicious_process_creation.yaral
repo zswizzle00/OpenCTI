@@ -1,0 +1,15 @@
+rule suspicious_process_creation {
+  meta:
+    author = "Threat Hunting Team"
+    description = "Detects suspicious process creation patterns"
+    severity = "HIGH"
+    confidence = "MEDIUM"
+
+  events:
+    $process.metadata.event_type = "PROCESS_CREATION"
+    $process.target.process.command_line = /powershell.*-enc|cmd.*\/c.*powershell|wmic.*process.*call.*create/
+    $process.target.process.parent_process.command_line = /chrome|firefox|edge|iexplore/
+
+  condition:
+    $process
+} 
