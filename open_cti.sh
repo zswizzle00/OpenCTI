@@ -18,9 +18,9 @@ SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
 # Memory configurations (in MB)
-NODE_MEMORY="2048"  # Platform memory 2GB
-ES_MEMORY="4g"     # ElasticSearch memory 4GB
-REDIS_MEMORY="1g"  # Redis memory 1GB
+NODE_MEMORY="1536M"  # Platform memory 1.5GB
+ES_MEMORY="3G"     # ElasticSearch memory 3GB
+REDIS_MEMORY="512M"  # Redis memory 512MB
 
 # Function to log messages
 log_message() {
@@ -306,7 +306,7 @@ check_system_memory() {
     
     log_message "${GREEN}Memory configuration:${NC}"
     log_message "Total system memory: ${total_mem}MB"
-    log_message "OpenCTI: ${NODE_MEMORY}M"
+    log_message "OpenCTI: ${NODE_MEMORY}"
     log_message "Elasticsearch: ${ES_MEMORY}"
     log_message "Redis: ${REDIS_MEMORY}"
 }
@@ -325,8 +325,8 @@ services:
       - "9200:9200"
     environment:
       - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
-      - thread_pool.search.queue_size=5000
+      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY} -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=75 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/usr/share/elasticsearch/data/heapdump.hprof
+      - thread_pool.search.queue_size=1000
       - xpack.security.enabled=false
       - cluster.name=opencti
       - http.host=0.0.0.0
@@ -334,10 +334,10 @@ services:
       - bootstrap.memory_lock=true
       - action.destructive_requires_name=true
       - indices.query.bool.max_clause_count=1024
-      - indices.memory.index_buffer_size=10%
-      - indices.breaker.total.limit=50%
-      - indices.breaker.fielddata.limit=40%
-      - indices.breaker.request.limit=40%
+      - indices.memory.index_buffer_size=5%
+      - indices.breaker.total.limit=40%
+      - indices.breaker.fielddata.limit=30%
+      - indices.breaker.request.limit=30%
       - indices.breaker.total.use_real_memory=false
       - node.name=opencti-es
       - cluster.initial_master_nodes=opencti-es
@@ -355,12 +355,17 @@ services:
       - discovery.zen.ping_timeout=30s
       - discovery.initial_state_timeout=30s
       - cluster.publish.timeout=30s
-      - cluster.routing.allocation.node_initial_primaries_recoveries=4
-      - cluster.routing.allocation.node_concurrent_recoveries=2
-      - cluster.routing.allocation.cluster_concurrent_rebalance=2
+      - cluster.routing.allocation.node_initial_primaries_recoveries=2
+      - cluster.routing.allocation.node_concurrent_recoveries=1
+      - cluster.routing.allocation.cluster_concurrent_rebalance=1
       - cluster.routing.allocation.balance.shard=0.45f
       - cluster.routing.allocation.balance.index=0.55f
       - cluster.routing.allocation.balance.threshold=1.0f
+      - indices.recovery.max_bytes_per_sec=50mb
+      - indices.recovery.concurrent_streams=2
+      - indices.recovery.concurrent_small_file_streams=2
+      - indices.recovery.max_concurrent_file_chunks=2
+      - indices.recovery.max_concurrent_operations=2
     deploy:
       resources:
         limits:
@@ -390,13 +395,13 @@ services:
     image: redis:6.2
     ports:
       - "6379:6379"
-    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru --maxmemory-samples 10 --save "" --appendonly no
     deploy:
       resources:
         limits:
           memory: ${REDIS_MEMORY}
         reservations:
-          memory: 512m
+          memory: 256M
     volumes:
       - redisdata:/data
     healthcheck:
@@ -408,7 +413,7 @@ services:
   opencti:
     image: opencti/platform:latest
     environment:
-      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
+      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY} --optimize-for-size --max-semi-space-size=128
       - OPENCTI_URL=http://localhost:8080
       - OPENCTI_ADMIN_EMAIL=admin@opencti.io
       - OPENCTI_ADMIN_PASSWORD=\${OPENCTI_ADMIN_PASSWORD}
@@ -427,9 +432,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${NODE_MEMORY}M
+          memory: ${NODE_MEMORY}
         reservations:
-          memory: 1024M
+          memory: 768M
     depends_on:
       elasticsearch:
         condition: service_healthy
