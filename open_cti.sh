@@ -18,9 +18,9 @@ SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
 # Memory configurations (in MB)
-NODE_MEMORY="4096"  # Platform memory 4GB
-ES_MEMORY="2g"     # ElasticSearch memory 2GB
-REDIS_MEMORY="2g"  # Redis memory 2GB
+NODE_MEMORY="2048"  # Platform memory 2GB
+ES_MEMORY="4g"     # ElasticSearch memory 4GB
+REDIS_MEMORY="1g"  # Redis memory 1GB
 
 # Function to log messages
 log_message() {
@@ -299,31 +299,6 @@ check_system_memory() {
         exit 1
     fi
     
-    # Calculate safe memory limits (leave 2GB for system)
-    local safe_mem=$((total_mem - 2048))
-    local es_mem=$((safe_mem * 40 / 100))  # 40% for Elasticsearch
-    local node_mem=$((safe_mem * 30 / 100))  # 30% for Node
-    local redis_mem=$((safe_mem * 10 / 100))  # 10% for Redis
-    
-    # Convert to appropriate units
-    if [ "$es_mem" -ge 1024 ]; then
-        ES_MEMORY="${es_mem}m"
-    else
-        ES_MEMORY="1g"  # Minimum 1GB
-    fi
-    
-    if [ "$node_mem" -ge 1024 ]; then
-        NODE_MEMORY="${node_mem}"
-    else
-        NODE_MEMORY="1024"  # Minimum 1GB
-    fi
-    
-    if [ "$redis_mem" -ge 512 ]; then
-        REDIS_MEMORY="${redis_mem}m"
-    else
-        REDIS_MEMORY="512m"  # Minimum 512MB
-    fi
-    
     # Export memory variables
     export NODE_MEMORY
     export ES_MEMORY
@@ -331,21 +306,14 @@ check_system_memory() {
     
     log_message "${GREEN}Memory configuration:${NC}"
     log_message "Total system memory: ${total_mem}MB"
-    log_message "Safe memory limit: ${safe_mem}MB"
+    log_message "OpenCTI: ${NODE_MEMORY}M"
     log_message "Elasticsearch: ${ES_MEMORY}"
-    log_message "Node: ${NODE_MEMORY}M"
     log_message "Redis: ${REDIS_MEMORY}"
 }
 
 # Create docker-compose.yml with memory limits
 create_docker_compose() {
     log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
-    
-    # Verify memory variables are set
-    if [ -z "$NODE_MEMORY" ] || [ -z "$ES_MEMORY" ] || [ -z "$REDIS_MEMORY" ]; then
-        log_message "${RED}Memory variables not set. Running memory check...${NC}"
-        check_system_memory
-    fi
     
     # Create docker-compose.yml with proper variable substitution
     cat > "$INSTALL_DIR/opencti/docker-compose.yml" << 'EOL'
