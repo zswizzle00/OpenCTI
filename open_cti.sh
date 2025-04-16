@@ -132,8 +132,62 @@ configure_system() {
 # Install required packages
 install_prerequisites() {
     log_message "${YELLOW}Checking and installing prerequisites...${NC}"
+    
+    # Update package list
     apt-get update >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to update package list${NC}"; exit 1; }
+    
+    # Install base packages
     apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release git python3 python3-pip build-essential libssl-dev libffi-dev python3-dev >> "$LOG_FILE" 2>&1
+    
+    # Install Java
+    log_message "${YELLOW}Installing Java...${NC}"
+    
+    # Check if Java is already installed
+    if ! command_exists java; then
+        # Add OpenJDK repository
+        apt-get install -y openjdk-11-jdk >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to install Java${NC}"; exit 1; }
+        
+        # Set JAVA_HOME
+        export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+        echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
+        
+        # Verify Java installation
+        java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+        if [ -z "$java_version" ]; then
+            log_message "${RED}Java installation failed${NC}"
+            exit 1
+        else
+            log_message "${GREEN}Java version $java_version installed successfully${NC}"
+        fi
+    else
+        log_message "${GREEN}Java is already installed${NC}"
+        java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+        log_message "${GREEN}Java version: $java_version${NC}"
+    fi
+    
+    # Verify Java memory settings
+    log_message "${YELLOW}Verifying Java memory settings...${NC}"
+    if [ -z "$JAVA_HOME" ]; then
+        export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+    fi
+    
+    # Check if JAVA_OPTS is set
+    if ! grep -q "JAVA_OPTS" /etc/environment; then
+        echo "JAVA_OPTS=\"-Xms${ES_MEMORY} -Xmx${ES_MEMORY}\"" >> /etc/environment
+    fi
+    
+    # Reload environment
+    source /etc/environment
+    
+    # Verify Java can allocate the required memory
+    log_message "${YELLOW}Testing Java memory allocation...${NC}"
+    if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
+        log_message "${RED}Java cannot allocate the required memory${NC}"
+        log_message "${YELLOW}Please check your system memory and adjust ES_MEMORY if necessary${NC}"
+        exit 1
+    fi
+    
+    log_message "${GREEN}Java memory settings verified${NC}"
 }
 
 # Install Docker
@@ -231,6 +285,17 @@ check_system_memory() {
         REDIS_MEMORY="4g"  # 4GB
         log_message "${GREEN}High memory mode: Using increased allocations${NC}"
     fi
+    
+    # Verify Java can handle the allocated memory
+    if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
+        log_message "${RED}Java cannot handle the allocated Elasticsearch memory${NC}"
+        log_message "${YELLOW}Reducing Elasticsearch memory allocation${NC}"
+        ES_MEMORY="2g"  # Fallback to 2GB
+        if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
+            log_message "${RED}Java cannot handle even the minimum memory allocation${NC}"
+            exit 1
+        fi
+    fi
 }
 
 # Create docker-compose.yml with memory limits
@@ -259,6 +324,16 @@ services:
       - indices.breaker.fielddata.limit=40%
       - indices.breaker.request.limit=40%
       - indices.breaker.total.use_real_memory=false
+      - node.name=opencti-es
+      - cluster.initial_master_nodes=opencti-es
+      - network.host=0.0.0.0
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+      - http.cors.allow-credentials=true
+      - path.repo=/usr/share/elasticsearch/data/backup
+      - discovery.seed_hosts=opencti-es
+      - cluster.routing.allocation.disk.threshold_enabled=false
     deploy:
       resources:
         limits:
@@ -275,11 +350,14 @@ services:
     volumes:
       - esdata:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
       interval: 30s
-      timeout: 10s
-      retries: 5
+      timeout: 20s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
+    networks:
+      - opencti_network
 
   redis:
     image: redis:6.2
@@ -402,6 +480,10 @@ volumes:
   redisdata:
   s3data:
   amqpdata:
+
+networks:
+  opencti_network:
+    driver: bridge
 EOL
     log_message "${GREEN}docker-compose.yml created with memory limits${NC}"
 }
@@ -433,10 +515,26 @@ check_service_health() {
     local services_healthy=0
 
     while [ $attempt -le $max_attempts ]; do
-        # Check Elasticsearch health
-        if ! curl -s "http://localhost:9200/_cluster/health" | grep -q '"status":"green\|yellow"'; then
-            log_message "${YELLOW}Waiting for Elasticsearch to be ready (attempt $attempt/$max_attempts)...${NC}"
-            # Check Elasticsearch logs if it's not responding
+        # Check Elasticsearch health with detailed logging
+        local es_health=$(curl -s "http://localhost:9200/_cluster/health")
+        local es_status=$(echo "$es_health" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+        
+        if [ -z "$es_status" ]; then
+            log_message "${YELLOW}Waiting for Elasticsearch to respond (attempt $attempt/$max_attempts)...${NC}"
+            if [ $attempt -gt 5 ]; then
+                log_message "${YELLOW}Checking Elasticsearch logs...${NC}"
+                docker-compose logs elasticsearch
+                log_message "${YELLOW}Checking Elasticsearch container status...${NC}"
+                docker-compose ps elasticsearch
+            fi
+            sleep 10
+            ((attempt++))
+            continue
+        fi
+
+        if [ "$es_status" != "green" ] && [ "$es_status" != "yellow" ]; then
+            log_message "${YELLOW}Elasticsearch status: $es_status (attempt $attempt/$max_attempts)${NC}"
+            log_message "${YELLOW}Full health response: $es_health${NC}"
             if [ $attempt -gt 5 ]; then
                 log_message "${YELLOW}Checking Elasticsearch logs...${NC}"
                 docker-compose logs elasticsearch
