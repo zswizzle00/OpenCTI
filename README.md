@@ -1,6 +1,212 @@
 # OpenCTI Installation Script
 
-A bash script to automate the installation and configuration of OpenCTI, an open-source threat intelligence platform.
+This script automates the installation of OpenCTI on Ubuntu servers. It handles all the necessary prerequisites, configurations, and service setups required for a production-ready OpenCTI deployment.
+
+## Prerequisites
+
+- Ubuntu Server (tested on 20.04 LTS and 22.04 LTS)
+- Minimum 10GB RAM (16GB recommended for production)
+- Root or sudo access
+- At least 50GB of free disk space
+- Internet connectivity
+
+## System Requirements
+
+### Memory Requirements
+- Minimum: 10GB RAM
+- Recommended: 16GB RAM or more
+- Memory allocations are automatically adjusted based on available system memory:
+  - Limited mode (<16GB): 
+    - OpenCTI: 3GB
+    - Elasticsearch: 2GB
+    - Redis: 1GB
+  - Standard mode (16-32GB):
+    - OpenCTI: 4GB
+    - Elasticsearch: 4GB
+    - Redis: 2GB
+  - High memory mode (>32GB):
+    - OpenCTI: 8GB
+    - Elasticsearch: 8GB
+    - Redis: 4GB
+
+### Port Requirements
+The following ports must be available:
+- 8080: OpenCTI Web Interface
+- 9200: Elasticsearch
+- 6379: Redis
+- 9000: MinIO
+- 5672: RabbitMQ
+- 15672: RabbitMQ Management Interface
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd opencti-install
+```
+
+2. Make the script executable:
+```bash
+chmod +x open_cti.sh
+```
+
+3. Run the installation script:
+```bash
+sudo ./open_cti.sh
+```
+
+### Optional Parameters
+
+The script accepts several optional parameters:
+
+```bash
+sudo ./open_cti.sh [options]
+```
+
+Options:
+- `-h, --help`: Show help message
+- `-d, --directory <path>`: Specify installation directory (default: /opt/opencti)
+- `-s, --skip-docker`: Skip Docker and Docker Compose installation
+- `-e, --env-only`: Only generate the .env file, skip installation steps
+- `-n, --node-memory <size>`: Set NodeJS memory limit (default: 4G)
+- `-m, --es-memory <size>`: Set ElasticSearch memory limit (default: 2G)
+- `-r, --redis-memory <size>`: Set Redis memory limit (default: 2G)
+
+## What the Script Does
+
+1. **System Configuration**
+   - Configures system memory settings
+   - Sets up swap space
+   - Configures kernel parameters for Elasticsearch
+
+2. **Prerequisites Installation**
+   - Installs Java 11 (OpenJDK or AdoptOpenJDK)
+   - Installs Docker and Docker Compose
+   - Sets up required system packages
+
+3. **Service Configuration**
+   - Creates and configures Docker network
+   - Sets up memory limits for all services
+   - Configures health checks
+   - Sets up persistent volumes
+
+4. **Security**
+   - Generates secure random passwords
+   - Configures service authentication
+   - Sets up proper file permissions
+
+## Services
+
+The installation includes the following services:
+
+1. **OpenCTI Platform**
+   - Main application server
+   - Web interface
+   - API endpoints
+
+2. **Elasticsearch**
+   - Search and analytics engine
+   - Data storage and indexing
+   - Configurable memory limits
+
+3. **Redis**
+   - Caching layer
+   - Session management
+   - Configurable memory limits
+
+4. **RabbitMQ**
+   - Message broker
+   - Task queue management
+   - Management interface
+
+5. **MinIO**
+   - Object storage
+   - File storage service
+   - S3-compatible interface
+
+## Post-Installation
+
+1. Access the web interface:
+   - URL: http://localhost:8080
+   - Default credentials:
+     - Email: admin@opencti.io
+     - Password: (Generated in .env file)
+
+2. Change default credentials:
+   - Log in with default credentials
+   - Navigate to Settings > Users
+   - Change admin password
+
+3. Verify services:
+```bash
+cd /opt/opencti
+docker-compose ps
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Java Installation Issues**
+   - If Java installation fails, try installing manually:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y openjdk-11-jdk
+   ```
+
+2. **Memory Issues**
+   - If services fail to start due to memory constraints:
+   ```bash
+   sudo ./open_cti.sh -m 2g -n 3g -r 1g
+   ```
+
+3. **Port Conflicts**
+   - If ports are already in use:
+   ```bash
+   sudo lsof -i :<port_number>
+   sudo kill <process_id>
+   ```
+
+### Logs
+
+Service logs can be accessed using:
+```bash
+cd /opt/opencti
+docker-compose logs [service_name]
+```
+
+## Maintenance
+
+### Updating
+To update OpenCTI:
+```bash
+cd /opt/opencti
+docker-compose pull
+docker-compose up -d
+```
+
+### Backup
+Regular backups are recommended:
+```bash
+cd /opt/opencti
+docker-compose exec elasticsearch elasticsearch-dump --input=http://localhost:9200/ --output=/backup/elasticsearch.json
+```
+
+## Security Considerations
+
+1. Change all default passwords
+2. Configure firewall rules
+3. Enable HTTPS
+4. Regular security updates
+5. Monitor system resources
+
+## Support
+
+For issues and support:
+- Open an issue in the repository
+- Check the OpenCTI documentation
+- Join the OpenCTI community
 
 ## Features
 
@@ -12,14 +218,6 @@ A bash script to automate the installation and configuration of OpenCTI, an open
 - Flexible installation options
 - Memory configuration for all components
 - System optimization for ElasticSearch
-
-## Prerequisites
-
-- Ubuntu-based Linux distribution
-- Root or sudo access
-- Internet connection
-- At least 4GB RAM (8GB recommended)
-- At least 20GB free disk space
 
 ## Installation Options
 

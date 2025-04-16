@@ -332,7 +332,7 @@ check_system_memory() {
 # Create docker-compose.yml with memory limits
 create_docker_compose() {
     log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
-    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
+    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << 'EOL'
 version: '3'
 services:
   elasticsearch:
