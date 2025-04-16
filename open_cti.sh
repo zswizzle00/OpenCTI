@@ -317,22 +317,41 @@ check_system_memory() {
         log_message "${GREEN}High memory mode: Using increased allocations${NC}"
     fi
     
+    # Export memory variables
+    export NODE_MEMORY
+    export ES_MEMORY
+    export REDIS_MEMORY
+    
     # Verify Java can handle the allocated memory
     if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
         log_message "${RED}Java cannot handle the allocated Elasticsearch memory${NC}"
         log_message "${YELLOW}Reducing Elasticsearch memory allocation${NC}"
         ES_MEMORY="2g"  # Fallback to 2GB
+        export ES_MEMORY
         if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
             log_message "${RED}Java cannot handle even the minimum memory allocation${NC}"
             exit 1
         fi
     fi
+    
+    log_message "${GREEN}Memory configuration:${NC}"
+    log_message "OpenCTI: ${NODE_MEMORY}M"
+    log_message "Elasticsearch: ${ES_MEMORY}"
+    log_message "Redis: ${REDIS_MEMORY}"
 }
 
 # Create docker-compose.yml with memory limits
 create_docker_compose() {
     log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
-    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << 'EOL'
+    
+    # Verify memory variables are set
+    if [ -z "$NODE_MEMORY" ] || [ -z "$ES_MEMORY" ] || [ -z "$REDIS_MEMORY" ]; then
+        log_message "${RED}Memory variables not set. Running memory check...${NC}"
+        check_system_memory
+    fi
+    
+    # Create docker-compose.yml with proper variable substitution
+    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
 version: '3'
 services:
   elasticsearch:
