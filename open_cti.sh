@@ -91,6 +91,15 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to check OS type
+get_os_type() {
+    case "$(uname -s)" in
+        Darwin*) echo "macos" ;;
+        Linux*)  echo "linux" ;;
+        *)       echo "unknown" ;;
+    esac
+}
+
 # Function to configure system settings
 configure_system() {
     log_message "${YELLOW}Configuring system settings...${NC}"
@@ -137,15 +146,13 @@ install_prerequisites() {
     apt-get update >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to update package list${NC}"; exit 1; }
     
     # Install base packages
-    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release git python3 python3-pip build-essential libssl-dev libffi-dev python3-dev >> "$LOG_FILE" 2>&1
+    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release git python3 python3-pip build-essential libssl-dev libffi-dev python3-dev software-properties-common wget >> "$LOG_FILE" 2>&1
     
     # Install Java
-    log_message "${YELLOW}Installing Java...${NC}"
-    
-    # Check if Java is already installed
     if ! command_exists java; then
+        log_message "${YELLOW}Installing Java...${NC}"
+        
         # Add OpenJDK repository
-        apt-get install -y software-properties-common >> "$LOG_FILE" 2>&1
         add-apt-repository -y ppa:openjdk-r/ppa >> "$LOG_FILE" 2>&1
         apt-get update >> "$LOG_FILE" 2>&1
         
@@ -153,7 +160,6 @@ install_prerequisites() {
         apt-get install -y openjdk-11-jdk >> "$LOG_FILE" 2>&1 || { 
             log_message "${RED}Failed to install OpenJDK 11, trying alternative method...${NC}"
             # Alternative method using official Oracle repository
-            apt-get install -y wget >> "$LOG_FILE" 2>&1
             wget -qO - https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | apt-key add - >> "$LOG_FILE" 2>&1
             echo "deb https://adoptopenjdk.jfrog.io/adoptopenjdk/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptopenjdk.list >> "$LOG_FILE" 2>&1
             apt-get update >> "$LOG_FILE" 2>&1
@@ -171,50 +177,23 @@ install_prerequisites() {
         
         echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
         echo "PATH=$PATH:$JAVA_HOME/bin" >> /etc/environment
-        
-        # Verify Java installation
         source /etc/environment
-        java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-        if [ -z "$java_version" ]; then
-            log_message "${RED}Java installation failed${NC}"
-            log_message "${YELLOW}Attempting to find Java installation...${NC}"
-            find /usr/lib/jvm -name java -type f -exec {} -version \; 2>&1
-            exit 1
-        else
-            log_message "${GREEN}Java version $java_version installed successfully${NC}"
-            log_message "${GREEN}JAVA_HOME set to: $JAVA_HOME${NC}"
-        fi
-    else
-        log_message "${GREEN}Java is already installed${NC}"
-        java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-        log_message "${GREEN}Java version: $java_version${NC}"
     fi
+    
+    # Verify Java installation
+    if ! command_exists java; then
+        log_message "${RED}Java installation failed${NC}"
+        log_message "${YELLOW}Attempting to find Java installation...${NC}"
+        find /usr/lib/jvm -name java -type f -exec {} -version \; 2>&1
+        exit 1
+    fi
+    
+    java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+    log_message "${GREEN}Java version $java_version installed successfully${NC}"
+    log_message "${GREEN}JAVA_HOME set to: $JAVA_HOME${NC}"
     
     # Verify Java memory settings
     log_message "${YELLOW}Verifying Java memory settings...${NC}"
-    if [ -z "$JAVA_HOME" ]; then
-        if [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
-            export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-        elif [ -d "/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64" ]; then
-            export JAVA_HOME="/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64"
-        else
-            export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
-        fi
-        echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
-        echo "PATH=$PATH:$JAVA_HOME/bin" >> /etc/environment
-        source /etc/environment
-    fi
-    
-    # Check if JAVA_OPTS is set
-    if ! grep -q "JAVA_OPTS" /etc/environment; then
-        echo "JAVA_OPTS=\"-Xms${ES_MEMORY} -Xmx${ES_MEMORY}\"" >> /etc/environment
-    fi
-    
-    # Reload environment
-    source /etc/environment
-    
-    # Verify Java can allocate the required memory
-    log_message "${YELLOW}Testing Java memory allocation...${NC}"
     if ! java -Xms${ES_MEMORY} -Xmx${ES_MEMORY} -version 2>&1 >/dev/null; then
         log_message "${RED}Java cannot allocate the required memory${NC}"
         log_message "${YELLOW}Please check your system memory and adjust ES_MEMORY if necessary${NC}"
@@ -228,12 +207,23 @@ install_prerequisites() {
 install_docker() {
     if ! command_exists docker; then
         log_message "${YELLOW}Installing Docker...${NC}"
+        
+        # Add Docker's official GPG key
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        
+        # Add Docker repository
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        
+        # Install Docker
         apt-get update >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to update Docker package list${NC}"; exit 1; }
         apt-get install -y docker-ce docker-ce-cli containerd.io >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to install Docker${NC}"; exit 1; }
+        
+        # Start and enable Docker
         systemctl enable docker
         systemctl start docker
+        
+        # Add current user to docker group
+        usermod -aG docker $SUDO_USER
     fi
 }
 
@@ -241,8 +231,15 @@ install_docker() {
 install_docker_compose() {
     if ! command_exists docker-compose; then
         log_message "${YELLOW}Installing Docker Compose...${NC}"
+        
+        # Download Docker Compose
         curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        
+        # Make it executable
         chmod +x /usr/local/bin/docker-compose
+        
+        # Create symbolic link
+        ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
     fi
 }
 
