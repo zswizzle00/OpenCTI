@@ -17,10 +17,10 @@ INSTALL_DIR="/opt/opencti"
 SKIP_DOCKER_INSTALL=false
 ENV_FILE_ONLY=false
 
-# Memory configurations
-NODE_MEMORY="8192"  # Platform memory in MB (8GB)
-ES_MEMORY="4G"    # ElasticSearch memory
-REDIS_MEMORY="8G" # Redis memory (for 2M stream limit)
+# Memory configurations (in MB)
+NODE_MEMORY="4096"  # Platform memory 4GB
+ES_MEMORY="2g"     # ElasticSearch memory 2GB
+REDIS_MEMORY="2g"  # Redis memory 2GB
 
 # Function to log messages
 log_message() {
@@ -35,9 +35,9 @@ show_help() {
     echo "  -d, --directory <path>    Specify the installation directory (default: /opt/opencti)"
     echo "  -s, --skip-docker         Skip Docker and Docker Compose installation"
     echo "  -e, --env-only            Only generate the .env file, skip installation steps"
-    echo "  -n, --node-memory <size>  Set NodeJS memory limit (default: 8G)"
-    echo "  -m, --es-memory <size>    Set ElasticSearch memory limit (default: 4G)"
-    echo "  -r, --redis-memory <size> Set Redis memory limit (default: 8G)"
+    echo "  -n, --node-memory <size>  Set NodeJS memory limit (default: 4G)"
+    echo "  -m, --es-memory <size>    Set ElasticSearch memory limit (default: 2G)"
+    echo "  -r, --redis-memory <size> Set Redis memory limit (default: 2G)"
     exit 0
 }
 
@@ -177,6 +177,40 @@ EOL
     log_message "${GREEN}.env file created at $INSTALL_DIR/opencti/.env${NC}"
 }
 
+# Function to check system memory
+check_system_memory() {
+    log_message "${YELLOW}Checking system memory...${NC}"
+    
+    # Get total system memory in MB
+    local total_mem=$(free -m | awk '/^Mem:/{print $2}')
+    local required_mem=10240  # Minimum 10GB required
+    
+    if [ "$total_mem" -lt "$required_mem" ]; then
+        log_message "${RED}Insufficient system memory. OpenCTI requires at least 10GB of RAM.${NC}"
+        log_message "${YELLOW}Available memory: ${total_mem}MB${NC}"
+        log_message "${YELLOW}Required memory: ${required_mem}MB${NC}"
+        exit 1
+    fi
+    
+    # Adjust memory allocations based on available system memory
+    if [ "$total_mem" -lt 16384 ]; then  # Less than 16GB
+        NODE_MEMORY="3072"  # 3GB
+        ES_MEMORY="2g"     # 2GB
+        REDIS_MEMORY="1g"  # 1GB
+        log_message "${YELLOW}Limited memory mode: Adjusting service memory allocations${NC}"
+    elif [ "$total_mem" -lt 32768 ]; then  # Less than 32GB
+        NODE_MEMORY="4096"  # 4GB
+        ES_MEMORY="4g"     # 4GB
+        REDIS_MEMORY="2g"  # 2GB
+        log_message "${YELLOW}Standard memory mode: Using default allocations${NC}"
+    else  # 32GB or more
+        NODE_MEMORY="8192"  # 8GB
+        ES_MEMORY="8g"     # 8GB
+        REDIS_MEMORY="4g"  # 4GB
+        log_message "${GREEN}High memory mode: Using increased allocations${NC}"
+    fi
+}
+
 # Create docker-compose.yml with memory limits
 create_docker_compose() {
     log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
@@ -199,6 +233,8 @@ services:
     deploy:
       resources:
         limits:
+          memory: ${ES_MEMORY}
+        reservations:
           memory: ${ES_MEMORY}
     ulimits:
       memlock:
@@ -224,6 +260,8 @@ services:
       resources:
         limits:
           memory: ${REDIS_MEMORY}
+        reservations:
+          memory: 512m
     volumes:
       - redisdata:/data
     healthcheck:
@@ -255,6 +293,8 @@ services:
       resources:
         limits:
           memory: ${NODE_MEMORY}M
+        reservations:
+          memory: 1024M
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -263,6 +303,22 @@ services:
       rabbitmq:
         condition: service_healthy
       minio:
+        condition: service_started
+
+  worker:
+    image: opencti/worker:latest
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=\${OPENCTI_ADMIN_TOKEN}
+      - WORKER_LOG_LEVEL=info
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 512M
+    depends_on:
+      opencti:
         condition: service_started
 
   minio:
@@ -278,7 +334,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -300,7 +358,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 1G
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 30s
@@ -379,6 +439,9 @@ main() {
         exit 0
     fi
 
+    # Check system memory before proceeding
+    check_system_memory
+    
     configure_system
     install_prerequisites
 
