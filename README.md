@@ -43,7 +43,7 @@ The following ports must be available:
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd opencti-install
+cd OpenCTI
 ```
 
 2. Make the script executable:
