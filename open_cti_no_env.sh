@@ -15,7 +15,6 @@ LOG_FILE="/var/log/opencti_install.log"
 # Defaults for argument parsing
 INSTALL_DIR="/opt/opencti"
 SKIP_DOCKER_INSTALL=false
-ENV_FILE_ONLY=false
 
 # Memory configurations (in MB)
 NODE_MEMORY="8096M"  # Platform memory 8GB (default from docs)
@@ -34,9 +33,8 @@ show_help() {
     echo "  -h, --help                Show this help message and exit"
     echo "  -d, --directory <path>    Specify the installation directory (default: /opt/opencti)"
     echo "  -s, --skip-docker         Skip Docker and Docker Compose installation"
-    echo "  -e, --env-only            Only generate the .env file, skip installation steps"
-    echo "  -n, --node-memory <size>  Set NodeJS memory limit (default: 4G)"
-    echo "  -m, --es-memory <size>    Set ElasticSearch memory limit (default: 2G)"
+    echo "  -n, --node-memory <size>  Set NodeJS memory limit (default: 8G)"
+    echo "  -m, --es-memory <size>    Set ElasticSearch memory limit (default: 8G)"
     echo "  -r, --redis-memory <size> Set Redis memory limit (default: 2G)"
     exit 0
 }
@@ -53,10 +51,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -s|--skip-docker)
             SKIP_DOCKER_INSTALL=true
-            shift
-            ;;
-        -e|--env-only)
-            ENV_FILE_ONLY=true
             shift
             ;;
         -n|--node-memory)
@@ -241,62 +235,6 @@ install_docker_compose() {
         # Create symbolic link
         ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
     fi
-}
-
-# Securely generate random passwords
-generate_password() {
-    openssl rand -base64 12
-}
-
-# Create environment file
-create_env_file() {
-    log_message "${YELLOW}Creating environment configuration...${NC}"
-    mkdir -p "$INSTALL_DIR/opencti"
-    
-    # Get the VM's IP address
-    VM_IP=$(hostname -I | awk '{print $1}')
-    if [ -z "$VM_IP" ]; then
-        VM_IP=$(ip addr show | grep -w inet | grep -v 127.0.0.1 | awk '{print $2}' | cut -d/ -f1 | head -n 1)
-    fi
-    
-    if [ -z "$VM_IP" ]; then
-        log_message "${RED}Could not determine VM IP address, using localhost${NC}"
-        VM_IP="localhost"
-    fi
-    
-    cat > "$INSTALL_DIR/opencti/.env" << EOL
-# OpenCTI Configuration
-OPENCTI_ADMIN_EMAIL=admin@opencti.io
-OPENCTI_ADMIN_PASSWORD=admin@123
-OPENCTI_ADMIN_TOKEN=$(uuidgen)
-OPENCTI_BASE_URL=http://${VM_IP}:8080
-NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
-
-# Healthcheck Configuration
-HEALTHCHECK_ACCESS_KEY=$(uuidgen)
-
-# RabbitMQ Configuration
-RABBITMQ_DEFAULT_USER=opencti
-RABBITMQ_DEFAULT_PASS=admin@123
-RABBITMQ_MAX_MESSAGE_SIZE=536870912
-RABBITMQ_CONSUMER_TIMEOUT=86400000
-
-# Redis Configuration
-REDIS_PASSWORD=admin@123
-REDIS_MEMORY_LIMIT=${REDIS_MEMORY}
-
-# Elasticsearch Configuration
-ELASTICSEARCH_URL=http://elasticsearch:9200
-ELASTICSEARCH_USERNAME=elastic
-ELASTICSEARCH_PASSWORD=admin@123
-ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
-ELASTICSEARCH_THREAD_POOL_SEARCH_QUEUE_SIZE=5000
-
-# MinIO Configuration
-MINIO_ROOT_USER=opencti
-MINIO_ROOT_PASSWORD=admin@123
-EOL
-    log_message "${GREEN}.env file created at $INSTALL_DIR/opencti/.env${NC}"
 }
 
 # Function to check system memory
@@ -596,12 +534,6 @@ check_service_health() {
 
 # Main function to coordinate the setup
 main() {
-    if $ENV_FILE_ONLY; then
-        create_env_file
-        log_message "${GREEN}Environment file generation complete. Exiting as requested.${NC}"
-        exit 0
-    fi
-
     # Check system memory before proceeding
     check_system_memory
     
@@ -625,20 +557,6 @@ main() {
         git clone https://github.com/OpenCTI-Platform/opencti.git || { log_message "${RED}Failed to clone repository${NC}"; exit 1; }
     fi
 
-    # Create .env file while preserving .env.sample
-    if [ -f "$INSTALL_DIR/opencti/.env.sample" ]; then
-        log_message "${YELLOW}Preserving .env.sample file...${NC}"
-        cp "$INSTALL_DIR/opencti/.env.sample" "$INSTALL_DIR/opencti/.env.sample.bak"
-    fi
-
-    create_env_file
-
-    # Restore .env.sample if it was backed up
-    if [ -f "$INSTALL_DIR/opencti/.env.sample.bak" ]; then
-        mv "$INSTALL_DIR/opencti/.env.sample.bak" "$INSTALL_DIR/opencti/.env.sample"
-        log_message "${GREEN}Restored .env.sample file${NC}"
-    fi
-
     create_docker_compose
 
     # Verify ports before starting
@@ -653,11 +571,8 @@ main() {
 
     log_message "${GREEN}OpenCTI installation completed!${NC}"
     log_message "${GREEN}OpenCTI is now accessible at: http://localhost:8080${NC}"
-    log_message "${YELLOW}Default credentials:${NC}"
-    log_message "Email: admin@opencti.io"
-    log_message "Password: (Generated in the .env file)"
-    log_message "${YELLOW}Please change these credentials after your first login!${NC}"
+    log_message "${YELLOW}Please configure your .env file with the appropriate credentials.${NC}"
 }
 
 # Execute main function
-main
+main 
