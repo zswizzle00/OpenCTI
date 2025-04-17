@@ -11,6 +11,9 @@ This script automates the installation and configuration of the OpenCTI platform
 - Health monitoring and checks
 - Docker and Docker Compose setup
 - Preserves original configuration samples
+- Automatic IP address detection for configuration
+- Robust Docker service management
+- Comprehensive error handling and logging
 
 ## Prerequisites
 
@@ -19,6 +22,7 @@ This script automates the installation and configuration of the OpenCTI platform
 - Minimum 10GB of RAM
 - Internet connection
 - Git
+- At least 20GB of free disk space
 
 ## Default Configuration
 
@@ -28,7 +32,7 @@ This script automates the installation and configuration of the OpenCTI platform
   - OpenCTI: 8080
   - Elasticsearch: 9200
   - Redis: 6379
-  - MinIO: 9000
+  - MinIO: 9000, 9001
   - RabbitMQ: 5672, 15672
 
 ## Memory Configuration
@@ -37,7 +41,8 @@ This script automates the installation and configuration of the OpenCTI platform
 - Elasticsearch: 8GB
 - Redis: 2GB
 
-<<<<<<< HEAD
+## Installation Steps
+
 1. Clone the repository:
 ```bash
 git clone <repository-url>
@@ -57,9 +62,6 @@ sudo ./open_cti.sh
 ### Optional Parameters
 
 The script accepts several optional parameters:
-=======
-## Usage
->>>>>>> 441bd3c (Enhance open_cti.sh to automatically determine the VM's IP address for configuration. Update .env file generation with fixed default passwords and UUIDs for admin token and healthcheck access key. Preserve original .env.sample during creation and restore it if backed up. Update README.md to reflect changes in installation and configuration processes.)
 
 ```bash
 sudo ./open_cti.sh [options]
@@ -97,6 +99,18 @@ Custom memory settings:
 sudo ./open_cti.sh -n 4G -m 4G -r 1G
 ```
 
+## System Configuration
+
+The script automatically configures the following system settings:
+
+- Sets vm.max_map_count for ElasticSearch
+- Configures vm.swappiness for optimal performance
+- Sets vm.overcommit_memory
+- Creates and configures swap file (8GB)
+- Installs and configures Java
+- Sets up Docker and Docker Compose
+- Configures all required services
+
 ## Post-Installation
 
 After installation:
@@ -117,16 +131,29 @@ After installation:
 2. **Memory Issues**
    - Verify system has sufficient RAM
    - Adjust memory settings if needed using the options
+   - Check system logs for memory-related errors
 
 3. **Docker Issues**
-   - Ensure Docker is running: `systemctl status docker`
+   - If Docker service fails to start, try:
+     ```bash
+     sudo service docker start
+     # or
+     sudo systemctl start docker
+     ```
    - Check Docker logs: `docker-compose logs`
+   - Verify Docker installation: `docker --version`
+
+4. **Service Health Issues**
+   - Check service health: `docker-compose ps`
+   - View logs: `docker-compose logs <service-name>`
+   - Restart services: `docker-compose restart`
 
 ### Logs
 
 - Installation log: `/var/log/opencti_install.log`
 - Docker logs: `docker-compose logs`
 - OpenCTI logs: `docker-compose logs opencti`
+- System logs: `/var/log/syslog`
 
 ## Security Notes
 
@@ -134,6 +161,7 @@ After installation:
 - Admin token is automatically generated as a UUID
 - Healthcheck access key is automatically generated as a UUID
 - It is recommended to change all default passwords after installation
+- The script automatically configures secure defaults for all services
 
 ## Support
 

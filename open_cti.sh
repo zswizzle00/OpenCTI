@@ -208,6 +208,13 @@ install_docker() {
     if ! command_exists docker; then
         log_message "${YELLOW}Installing Docker...${NC}"
         
+        # Remove old versions if they exist
+        apt-get remove -y docker docker-engine docker.io containerd runc || true
+        
+        # Install required packages
+        apt-get update >> "$LOG_FILE" 2>&1
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release >> "$LOG_FILE" 2>&1
+        
         # Add Docker's official GPG key
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
         
@@ -215,15 +222,77 @@ install_docker() {
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         
         # Install Docker
-        apt-get update >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to update Docker package list${NC}"; exit 1; }
-        apt-get install -y docker-ce docker-ce-cli containerd.io >> "$LOG_FILE" 2>&1 || { log_message "${RED}Failed to install Docker${NC}"; exit 1; }
+        apt-get update >> "$LOG_FILE" 2>&1
+        apt-get install -y docker-ce docker-ce-cli containerd.io >> "$LOG_FILE" 2>&1
         
-        # Start and enable Docker
-        systemctl enable docker
-        systemctl start docker
+        # Start and enable Docker service
+        if command_exists systemctl; then
+            log_message "${YELLOW}Using systemd to manage Docker service...${NC}"
+            systemctl enable docker
+            systemctl start docker
+        else
+            log_message "${YELLOW}Using service command to manage Docker service...${NC}"
+            update-rc.d docker defaults
+            service docker start
+        fi
+        
+        # Verify Docker is running
+        if ! docker info > /dev/null 2>&1; then
+            log_message "${RED}Failed to start Docker service${NC}"
+            log_message "${YELLOW}Attempting to start Docker manually...${NC}"
+            if command_exists systemctl; then
+                systemctl start docker
+            else
+                service docker start
+            fi
+            
+            # Wait for Docker to start
+            for i in {1..30}; do
+                if docker info > /dev/null 2>&1; then
+                    break
+                fi
+                sleep 1
+            done
+            
+            if ! docker info > /dev/null 2>&1; then
+                log_message "${RED}Failed to start Docker service after multiple attempts${NC}"
+                exit 1
+            fi
+        fi
         
         # Add current user to docker group
         usermod -aG docker $SUDO_USER
+        
+        # Verify Docker installation
+        if ! docker --version; then
+            log_message "${RED}Docker installation failed${NC}"
+            exit 1
+        fi
+        
+        log_message "${GREEN}Docker installed and started successfully${NC}"
+    else
+        # Ensure Docker service is running
+        if ! docker info > /dev/null 2>&1; then
+            log_message "${YELLOW}Starting Docker service...${NC}"
+            if command_exists systemctl; then
+                systemctl start docker
+            else
+                service docker start
+            fi
+            
+            # Wait for Docker to start
+            for i in {1..30}; do
+                if docker info > /dev/null 2>&1; then
+                    break
+                fi
+                sleep 1
+            done
+            
+            if ! docker info > /dev/null 2>&1; then
+                log_message "${RED}Failed to start Docker service${NC}"
+                exit 1
+            fi
+        fi
     fi
 }
 
@@ -240,6 +309,14 @@ install_docker_compose() {
         
         # Create symbolic link
         ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+        
+        # Verify installation
+        if ! docker-compose --version; then
+            log_message "${RED}Docker Compose installation failed${NC}"
+            exit 1
+        fi
+        
+        log_message "${GREEN}Docker Compose installed successfully${NC}"
     fi
 }
 
