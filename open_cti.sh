@@ -433,6 +433,132 @@ main() {
         git clone https://github.com/OpenCTI-Platform/opencti.git || { log_message "${RED}Failed to clone repository${NC}"; exit 1; }
     fi
 
+    # Copy necessary configuration files
+    log_message "${YELLOW}Copying configuration files...${NC}"
+    if [ -f "$INSTALL_DIR/opencti/docker-compose.yml" ]; then
+        cp "$INSTALL_DIR/opencti/docker-compose.yml" "$INSTALL_DIR/opencti/docker-compose.yml.bak"
+    fi
+    
+    # Copy the default docker-compose.yml if it doesn't exist
+    if [ ! -f "$INSTALL_DIR/opencti/docker-compose.yml" ]; then
+        cat > "$INSTALL_DIR/opencti/docker-compose.yml" << EOL
+version: '3'
+services:
+  redis:
+    image: redis:7.0
+    restart: always
+    volumes:
+      - redisdata:/data
+    command: ["--maxmemory", "\${REDIS_MEMORY_LIMIT}", "--maxmemory-policy", "allkeys-lru"]
+    environment:
+      - REDIS_PASSWORD=\${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "\${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    restart: always
+    volumes:
+      - elasticsearchdata:/usr/share/elasticsearch/data
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=\${ELASTICSEARCH_PASSWORD}
+      - ES_JAVA_OPTS=\${ES_JAVA_OPTS}
+      - thread_pool.search.queue_size=\${ELASTICSEARCH_THREAD_POOL_SEARCH_QUEUE_SIZE}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:\${ELASTICSEARCH_PASSWORD} http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    restart: always
+    volumes:
+      - s3data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=\${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=\${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    restart: always
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=\${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=\${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  opencti:
+    image: opencti/platform:5.12.4
+    restart: always
+    depends_on:
+      - redis
+      - elasticsearch
+      - minio
+      - rabbitmq
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_OPTIONS=\${NODE_OPTIONS}
+      - OPENCTI_ADMIN_EMAIL=\${OPENCTI_ADMIN_EMAIL}
+      - OPENCTI_ADMIN_PASSWORD=\${OPENCTI_ADMIN_PASSWORD}
+      - OPENCTI_ADMIN_TOKEN=\${OPENCTI_ADMIN_TOKEN}
+      - OPENCTI_BASE_URL=\${OPENCTI_BASE_URL}
+      - REDIS_HOSTNAME=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=\${REDIS_PASSWORD}
+      - ELASTICSEARCH_URL=\${ELASTICSEARCH_URL}
+      - ELASTICSEARCH_USERNAME=\${ELASTICSEARCH_USERNAME}
+      - ELASTICSEARCH_PASSWORD=\${ELASTICSEARCH_PASSWORD}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=\${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=\${MINIO_ROOT_PASSWORD}
+      - RABBITMQ_HOSTNAME=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=\${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_PASSWORD=\${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_MAX_MESSAGE_SIZE=\${RABBITMQ_MAX_MESSAGE_SIZE}
+      - RABBITMQ_CONSUMER_TIMEOUT=\${RABBITMQ_CONSUMER_TIMEOUT}
+      - HEALTHCHECK_ACCESS_KEY=\${HEALTHCHECK_ACCESS_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redisdata:
+  elasticsearchdata:
+  s3data:
+  rabbitmqdata:
+EOL
+    fi
+
     # Create .env file while preserving .env.sample
     if [ -f "$INSTALL_DIR/opencti/.env.sample" ]; then
         log_message "${YELLOW}Preserving .env.sample file...${NC}"
