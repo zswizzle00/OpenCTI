@@ -326,198 +326,6 @@ check_system_memory() {
     log_message "Redis: ${REDIS_MEMORY}"
 }
 
-# Create docker-compose.yml with memory limits
-create_docker_compose() {
-    log_message "${YELLOW}Creating docker-compose.yml with memory limits...${NC}"
-    
-    # Create docker-compose.yml with proper variable substitution
-    cat > "$INSTALL_DIR/opencti/docker-compose.yml" << 'EOL'
-version: '3'
-services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
-    ports:
-      - "9200:9200"
-    environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms${ES_MEMORY} -Xmx${ES_MEMORY}
-      - thread_pool.search.queue_size=5000
-      - xpack.security.enabled=false
-      - cluster.name=opencti
-      - http.host=0.0.0.0
-      - transport.host=0.0.0.0
-      - bootstrap.memory_lock=true
-      - action.destructive_requires_name=true
-      - indices.query.bool.max_clause_count=1024
-      - indices.memory.index_buffer_size=10%
-      - indices.breaker.total.limit=50%
-      - indices.breaker.fielddata.limit=40%
-      - indices.breaker.request.limit=40%
-      - indices.breaker.total.use_real_memory=false
-      - node.name=opencti-es
-      - cluster.initial_master_nodes=opencti-es
-      - network.host=0.0.0.0
-      - http.cors.enabled=true
-      - http.cors.allow-origin=*
-      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
-      - http.cors.allow-credentials=true
-      - path.repo=/usr/share/elasticsearch/data/backup
-      - discovery.seed_hosts=opencti-es
-      - cluster.routing.allocation.disk.threshold_enabled=false
-    deploy:
-      resources:
-        limits:
-          memory: ${ES_MEMORY}
-        reservations:
-          memory: ${ES_MEMORY}
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    volumes:
-      - esdata:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status.*green\\|yellow'"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 60s
-    restart: unless-stopped
-    networks:
-      - opencti_network
-
-  redis:
-    image: redis:6.2
-    ports:
-      - "6379:6379"
-    command: redis-server --maxmemory ${REDIS_MEMORY} --maxmemory-policy allkeys-lru --maxmemory-samples 10
-    deploy:
-      resources:
-        limits:
-          memory: ${REDIS_MEMORY}
-        reservations:
-          memory: 1G
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  opencti:
-    image: opencti/platform:latest
-    environment:
-      - NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY}
-      - OPENCTI_URL=http://localhost:8080
-      - OPENCTI_ADMIN_EMAIL=admin@opencti.io
-      - OPENCTI_ADMIN_PASSWORD=\${OPENCTI_ADMIN_PASSWORD}
-      - OPENCTI_ADMIN_TOKEN=\${OPENCTI_ADMIN_TOKEN}
-      - ELASTIC_URL=http://elasticsearch:9200
-      - REDIS_URL=redis://redis:6379
-      - REDIS_PASSWORD=\${REDIS_PASSWORD}
-      - RABBITMQ_URL=amqp://rabbitmq:5672
-      - RABBITMQ_USERNAME=opencti
-      - RABBITMQ_PASSWORD=\${RABBITMQ_DEFAULT_PASS}
-      - MINIO_URL=http://minio:9000
-      - MINIO_ACCESS_KEY=\${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=\${MINIO_ROOT_PASSWORD}
-    ports:
-      - "8080:8080"
-    deploy:
-      resources:
-        limits:
-          memory: ${NODE_MEMORY}
-        reservations:
-          memory: 4G
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      minio:
-        condition: service_started
-
-  worker:
-    image: opencti/worker:latest
-    environment:
-      - OPENCTI_URL=http://opencti:8080
-      - OPENCTI_TOKEN=\${OPENCTI_ADMIN_TOKEN}
-      - WORKER_LOG_LEVEL=info
-    deploy:
-      resources:
-        limits:
-          memory: 768M
-        reservations:
-          memory: 512M
-    depends_on:
-      opencti:
-        condition: service_started
-
-  minio:
-    image: minio/minio
-    ports:
-      - "9000:9000"
-    command: server /data
-    environment:
-      - MINIO_ROOT_USER=\${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=\${MINIO_ROOT_PASSWORD}
-    volumes:
-      - s3data:/data
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  rabbitmq:
-    image: rabbitmq:3.9-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=opencti
-      - RABBITMQ_DEFAULT_PASS=\${RABBITMQ_DEFAULT_PASS}
-      - RABBITMQ_MAX_MESSAGE_SIZE=536870912
-      - RABBITMQ_CONSUMER_TIMEOUT=86400000
-    volumes:
-      - amqpdata:/var/lib/rabbitmq
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-volumes:
-  esdata:
-  redisdata:
-  s3data:
-  amqpdata:
-
-networks:
-  opencti_network:
-    driver: bridge
-EOL
-    log_message "${GREEN}docker-compose.yml created with memory limits${NC}"
-}
-
 # Function to verify port availability
 verify_ports() {
     log_message "${YELLOW}Verifying port availability...${NC}"
@@ -639,8 +447,6 @@ main() {
         log_message "${GREEN}Restored .env.sample file${NC}"
     fi
 
-    create_docker_compose
-
     # Verify ports before starting
     verify_ports
 
@@ -653,10 +459,7 @@ main() {
 
     log_message "${GREEN}OpenCTI installation completed!${NC}"
     log_message "${GREEN}OpenCTI is now accessible at: http://localhost:8080${NC}"
-    log_message "${YELLOW}Default credentials:${NC}"
-    log_message "Email: admin@opencti.io"
-    log_message "Password: (Generated in the .env file)"
-    log_message "${YELLOW}Please change these credentials after your first login!${NC}"
+    log_message "${YELLOW}Please configure your .env file with the appropriate credentials.${NC}"
 }
 
 # Execute main function
