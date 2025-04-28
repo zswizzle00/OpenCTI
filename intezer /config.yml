@@ -3,7 +3,7 @@ opencti:
   token: '71bb04ec-0740-4adf-9dd4-5f203e7f0132'
 
 rabbitmq:
-  hostname: '10.192.2.25'
+  hostname: 'rabbitmq'
   port: 5672
   username: 'guest'
   password: 'guest'
