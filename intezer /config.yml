@@ -5,8 +5,8 @@ opencti:
 rabbitmq:
   hostname: 'localhost'
   port: 5672
-  username: 'guest'
-  password: 'guest'
+  username: 'opencti'
+  password: 'admin@123'
   queue_name: 'intezer_sandbox'
 
 connector:
