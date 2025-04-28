@@ -3,11 +3,14 @@ opencti:
   token: '71bb04ec-0740-4adf-9dd4-5f203e7f0132'
 
 rabbitmq:
-  hostname: 'localhost'
+  hostname: '127.0.0.1'
   port: 5672
   username: 'opencti'
   password: 'admin@123'
   queue_name: 'intezer_sandbox'
+  use_ssl: false
+  heartbeat: 60
+  vhost: '/'
 
 connector:
   id: 'Intezer_Sandbox'

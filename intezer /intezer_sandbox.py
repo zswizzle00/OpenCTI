@@ -3,23 +3,31 @@
 import os
 import sys
 import time
+import logging
 from typing import Dict
 
 import yaml
 from intezer_api import IntezerApi
 from pycti import OpenCTIConnectorHelper, get_config_variable
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class IntezerSandboxConnector:
     def __init__(self):
         # Instantiate the connector helper from config
         config_file_path = os.path.dirname(os.path.abspath(__file__)) + "/config.yml"
+        logger.debug(f"Loading config from: {config_file_path}")
         config = (
             yaml.load(open(config_file_path), Loader=yaml.FullLoader)
             if os.path.isfile(config_file_path)
             else {}
         )
+        logger.debug(f"Config loaded: {config}")
+        
         self.helper = OpenCTIConnectorHelper(config)
+        logger.debug("OpenCTIConnectorHelper initialized")
 
         self.identity = self.helper.api.identity.create(
             type="Organization",
