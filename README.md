@@ -9,6 +9,7 @@ This repository contains a script to automate the installation and configuration
 - Internet connection
 - At least 4GB of RAM
 - At least 20GB of free disk space
+- Docker Compose V2 or higher (the script will automatically upgrade if needed)
 
 ## Quick Start
 
@@ -46,6 +47,7 @@ Options:
 The script will install and configure:
 
 1. **Docker and Docker Compose** (unless skipped with -s)
+   - Docker Compose V2 will be installed if an older version is detected
 2. **OpenCTI Platform** (version 5.12.5)
 3. **Required Services**:
    - Redis 6.2
@@ -137,18 +139,30 @@ All data is stored in Docker volumes:
 
 ### Common Issues
 
-1. **Elasticsearch fails to start**:
+1. **Docker Compose Version Issues**:
+   - If you see "ContainerConfig" errors, ensure you're using Docker Compose V2
+   - The script will automatically upgrade Docker Compose if needed
+   - Manual upgrade: `sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose`
+
+2. **Elasticsearch fails to start**:
    - Check if `vm.max_map_count` is set correctly
    - Verify available memory
+   - Check logs: `docker-compose logs elasticsearch`
 
-2. **Services not starting**:
+3. **Services not starting**:
    - Check logs: `docker-compose logs`
    - Verify all ports are available
    - Check disk space
+   - Ensure Docker daemon is running: `sudo systemctl status docker`
 
-3. **Connection issues**:
+4. **Connection issues**:
    - Verify all services are running: `docker-compose ps`
    - Check service logs for specific errors
+   - Ensure no firewall is blocking the ports
+
+5. **Installation Directory Issues**:
+   - If you get "destination path already exists" error, the script will now automatically clean the directory
+   - To start fresh: `sudo rm -rf /opt/opencti/*` before running the script
 
 ### Logs Location
 

@@ -61,6 +61,19 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to check Docker Compose version
+check_docker_compose() {
+    if command_exists docker-compose; then
+        VERSION=$(docker-compose --version | cut -d' ' -f3 | cut -d'.' -f1,2)
+        if (( $(echo "$VERSION < 2.0" | bc -l) )); then
+            log "Docker Compose version $VERSION detected. Installing Docker Compose V2..."
+            curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+        fi
+    fi
+}
+
 # Function to configure ElasticSearch
 configure_elasticsearch() {
     log "Configuring ElasticSearch..."
@@ -136,7 +149,8 @@ install_prerequisites() {
         python3-venv \
         software-properties-common \
         openssl \
-        uuid-runtime
+        uuid-runtime \
+        bc
 }
 
 # Function to install Docker
@@ -158,11 +172,17 @@ main() {
     if [ "$SKIP_DOCKER" = false ]; then
         install_prerequisites
         install_docker
+        check_docker_compose
     fi
 
     # Create installation directory
     log "Creating installation directory: $INSTALL_DIR"
-    mkdir -p "$INSTALL_DIR"
+    if [ -d "$INSTALL_DIR" ]; then
+        log "Directory exists. Cleaning up..."
+        rm -rf "$INSTALL_DIR"/*
+    else
+        mkdir -p "$INSTALL_DIR"
+    fi
     cd "$INSTALL_DIR"
 
     # Clone OpenCTI Docker repository
