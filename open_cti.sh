@@ -61,44 +61,32 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to generate random password
-generate_password() {
-    openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16
-}
-
-# Function to generate .env file
+# Function to generate .env file using Python script
 generate_env_file() {
     local env_file="$INSTALL_DIR/.env"
-    log "Generating .env file..."
+    log "Generating .env file using setup_env.py..."
     
-    # Generate secure passwords
-    local admin_password=$(generate_password)
-    local admin_token=$(generate_password)
-    local minio_password=$(generate_password)
-    local rabbitmq_password=$(generate_password)
+    # Check if Python 3 is installed
+    if ! command_exists python3; then
+        log "Python 3 is not installed. Installing..."
+        apt-get update
+        apt-get install -y python3 python3-pip
+    fi
     
-    # Create .env file
-    cat > "$env_file" << EOF
-# OpenCTI Configuration
-OPENCTI_ADMIN_EMAIL=admin@opencti.io
-OPENCTI_ADMIN_PASSWORD=${admin_password}
-OPENCTI_ADMIN_TOKEN=${admin_token}
-
-# MinIO Configuration
-MINIO_ROOT_USER=minio
-MINIO_ROOT_PASSWORD=${minio_password}
-
-# RabbitMQ Configuration
-RABBITMQ_DEFAULT_USER=opencti
-RABBITMQ_DEFAULT_PASS=${rabbitmq_password}
-EOF
-
-    log "Generated .env file with secure passwords"
-    log "Please save these credentials securely:"
-    log "OpenCTI Admin Password: ${admin_password}"
-    log "OpenCTI Admin Token: ${admin_token}"
-    log "MinIO Root Password: ${minio_password}"
-    log "RabbitMQ Password: ${rabbitmq_password}"
+    # Copy setup_env.py to installation directory
+    cp "$(dirname "$0")/setup_env.py" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/setup_env.py"
+    
+    # Run the Python script
+    cd "$INSTALL_DIR"
+    python3 setup_env.py
+    
+    if [ -f "$env_file" ]; then
+        log "Successfully generated .env file"
+    else
+        log "Error: Failed to generate .env file"
+        exit 1
+    fi
 }
 
 # Function to install prerequisites
