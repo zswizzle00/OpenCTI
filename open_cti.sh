@@ -146,7 +146,7 @@ main() {
 
     # Start OpenCTI
     log "Starting OpenCTI services..."
-    docker compose up -d
+    docker-compose up -d
 
     log "Installation completed successfully!"
     log "OpenCTI will be available at http://localhost:8080"
