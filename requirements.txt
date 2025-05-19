@@ -1,0 +1,2 @@
+# Python dependencies for OpenCTI installation script
+docker==6.1.3 
