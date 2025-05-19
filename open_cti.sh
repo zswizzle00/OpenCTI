@@ -61,6 +61,46 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to generate random password
+generate_password() {
+    openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16
+}
+
+# Function to generate .env file
+generate_env_file() {
+    local env_file="$INSTALL_DIR/.env"
+    log "Generating .env file..."
+    
+    # Generate secure passwords
+    local admin_password=$(generate_password)
+    local admin_token=$(generate_password)
+    local minio_password=$(generate_password)
+    local rabbitmq_password=$(generate_password)
+    
+    # Create .env file
+    cat > "$env_file" << EOF
+# OpenCTI Configuration
+OPENCTI_ADMIN_EMAIL=admin@opencti.io
+OPENCTI_ADMIN_PASSWORD=${admin_password}
+OPENCTI_ADMIN_TOKEN=${admin_token}
+
+# MinIO Configuration
+MINIO_ROOT_USER=minio
+MINIO_ROOT_PASSWORD=${minio_password}
+
+# RabbitMQ Configuration
+RABBITMQ_DEFAULT_USER=opencti
+RABBITMQ_DEFAULT_PASS=${rabbitmq_password}
+EOF
+
+    log "Generated .env file with secure passwords"
+    log "Please save these credentials securely:"
+    log "OpenCTI Admin Password: ${admin_password}"
+    log "OpenCTI Admin Token: ${admin_token}"
+    log "MinIO Root Password: ${minio_password}"
+    log "RabbitMQ Password: ${rabbitmq_password}"
+}
+
 # Function to install prerequisites
 install_prerequisites() {
     log "Installing prerequisites..."
@@ -74,10 +114,8 @@ install_prerequisites() {
         git \
         python3-pip \
         python3-venv \
-        software-properties-common
-
-    # Install Python dependencies
-    pip3 install -r requirements.txt --break-system-packages
+        software-properties-common \
+        openssl
 }
 
 # Function to install Docker
@@ -101,30 +139,30 @@ main() {
         install_docker
     fi
 
-    if [ "$ENV_ONLY" = true ]; then
-        log "Generating .env file only..."
-        # Add your .env generation logic here
-        exit 0
-    fi
-
     # Create installation directory
     log "Creating installation directory: $INSTALL_DIR"
     mkdir -p "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 
-    # Clone OpenCTI repository
-    log "Cloning OpenCTI repository..."
-    git clone https://github.com/OpenCTI-Platform/opencti.git .
+    # Copy docker-compose.yml
+    log "Copying docker-compose.yml..."
+    cp "$(dirname "$0")/docker-compose.yml" .
 
     # Generate .env file
-    log "Generating .env file..."
-    # Add your .env generation logic here
+    generate_env_file
+
+    if [ "$ENV_ONLY" = true ]; then
+        log "Environment file generated. Exiting..."
+        exit 0
+    fi
 
     # Start OpenCTI
     log "Starting OpenCTI services..."
     docker compose up -d
 
     log "Installation completed successfully!"
+    log "OpenCTI will be available at http://localhost:8080"
+    log "Please check the log file for the generated credentials"
 }
 
 # Run main function
