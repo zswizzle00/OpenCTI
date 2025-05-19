@@ -61,32 +61,64 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to generate .env file using Python script
+# Function to configure ElasticSearch
+configure_elasticsearch() {
+    log "Configuring ElasticSearch..."
+    echo "vm.max_map_count=1048575" >> /etc/sysctl.conf
+    sysctl -w vm.max_map_count=1048575
+}
+
+# Function to configure RabbitMQ
+configure_rabbitmq() {
+    log "Configuring RabbitMQ..."
+    mkdir -p "$INSTALL_DIR/rabbitmq"
+    cat > "$INSTALL_DIR/rabbitmq/rabbitmq.conf" << EOF
+max_message_size = 536870912
+consumer_timeout = 86400000
+EOF
+}
+
+# Function to generate .env file
 generate_env_file() {
     local env_file="$INSTALL_DIR/.env"
-    log "Generating .env file using setup_env.py..."
+    log "Generating .env file..."
     
-    # Check if Python 3 is installed
-    if ! command_exists python3; then
-        log "Python 3 is not installed. Installing..."
-        apt-get update
-        apt-get install -y python3 python3-pip
-    fi
+    # Generate random UUIDs
+    ADMIN_TOKEN=$(uuidgen)
+    HEALTHCHECK_KEY=$(uuidgen)
+    MINIO_ROOT_USER=$(uuidgen)
+    MINIO_ROOT_PASSWORD=$(uuidgen)
+    CONNECTOR_HISTORY_ID=$(uuidgen)
+    CONNECTOR_EXPORT_FILE_STIX_ID=$(uuidgen)
+    CONNECTOR_EXPORT_FILE_CSV_ID=$(uuidgen)
+    CONNECTOR_IMPORT_FILE_STIX_ID=$(uuidgen)
+    CONNECTOR_EXPORT_FILE_TXT_ID=$(uuidgen)
+    CONNECTOR_IMPORT_DOCUMENT_ID=$(uuidgen)
+    CONNECTOR_ANALYSIS_ID=$(uuidgen)
     
-    # Copy setup_env.py to installation directory
-    cp "$(dirname "$0")/setup_env.py" "$INSTALL_DIR/"
-    chmod +x "$INSTALL_DIR/setup_env.py"
+    # Create .env file
+    cat > "$env_file" << EOF
+OPENCTI_ADMIN_EMAIL=admin@opencti.io
+OPENCTI_ADMIN_PASSWORD=ChangeMePlease
+OPENCTI_ADMIN_TOKEN=$ADMIN_TOKEN
+OPENCTI_BASE_URL=http://localhost:8080
+OPENCTI_HEALTHCHECK_ACCESS_KEY=$HEALTHCHECK_KEY
+MINIO_ROOT_USER=$MINIO_ROOT_USER
+MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
+RABBITMQ_DEFAULT_USER=guest
+RABBITMQ_DEFAULT_PASS=guest
+ELASTIC_MEMORY_SIZE=4G
+CONNECTOR_HISTORY_ID=$CONNECTOR_HISTORY_ID
+CONNECTOR_EXPORT_FILE_STIX_ID=$CONNECTOR_EXPORT_FILE_STIX_ID
+CONNECTOR_EXPORT_FILE_CSV_ID=$CONNECTOR_EXPORT_FILE_CSV_ID
+CONNECTOR_IMPORT_FILE_STIX_ID=$CONNECTOR_IMPORT_FILE_STIX_ID
+CONNECTOR_EXPORT_FILE_TXT_ID=$CONNECTOR_EXPORT_FILE_TXT_ID
+CONNECTOR_IMPORT_DOCUMENT_ID=$CONNECTOR_IMPORT_DOCUMENT_ID
+CONNECTOR_ANALYSIS_ID=$CONNECTOR_ANALYSIS_ID
+SMTP_HOSTNAME=localhost
+EOF
     
-    # Run the Python script
-    cd "$INSTALL_DIR"
-    python3 setup_env.py
-    
-    if [ -f "$env_file" ]; then
-        log "Successfully generated .env file"
-    else
-        log "Error: Failed to generate .env file"
-        exit 1
-    fi
+    log "Successfully generated .env file"
 }
 
 # Function to install prerequisites
@@ -103,7 +135,8 @@ install_prerequisites() {
         python3-pip \
         python3-venv \
         software-properties-common \
-        openssl
+        openssl \
+        uuid-runtime
 }
 
 # Function to install Docker
@@ -132,9 +165,13 @@ main() {
     mkdir -p "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 
-    # Copy docker-compose.yml
-    log "Copying docker-compose.yml..."
-    cp "$(dirname "$0")/docker-compose.yml" .
+    # Clone OpenCTI Docker repository
+    log "Cloning OpenCTI Docker repository..."
+    git clone https://github.com/OpenCTI-Platform/docker.git .
+    
+    # Configure ElasticSearch and RabbitMQ
+    configure_elasticsearch
+    configure_rabbitmq
 
     # Generate .env file
     generate_env_file
