@@ -1,2 +1,2 @@
 # Python dependencies for OpenCTI installation script
-docker==6.1.3 
+# No additional Python packages required as Docker is installed system-wide 
