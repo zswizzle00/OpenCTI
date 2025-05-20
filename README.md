@@ -1,206 +1,162 @@
-# OpenCTI Installation Script
+# OpenCTI Ecosystem Manager
 
-This repository contains a script to automate the installation and configuration of OpenCTI (Open Cyber Threat Intelligence Platform) using Docker.
+This script manages the OpenCTI ecosystem of connectors, providing an easy way to clone, update, and manage multiple OpenCTI connectors.
+
+## Features
+
+- Clone individual OpenCTI connectors from their respective repositories
+- Update existing connectors
+- Create a master docker-compose file that combines all connector configurations
+- Start and stop the entire ecosystem with a single command
+- List available connectors
+- Manage API keys for connectors that require them
+- Configure common values across all connectors
 
 ## Prerequisites
 
-- Linux-based operating system (Ubuntu/Debian recommended)
-- Root or sudo privileges
-- Internet connection
-- At least 4GB of RAM
-- At least 20GB of free disk space
-- Docker Compose V2 or higher (the script will automatically upgrade if needed)
+- Python 3.x
+- Git
+- Docker and Docker Compose
+- PyYAML package (`pip install pyyaml`)
 
-## Quick Start
+## Usage
 
-1. Clone this repository:
-```bash
-git clone https://github.com/yourusername/opencti-install.git
-cd opencti-install
-```
-
-2. Make the installation script executable:
-```bash
-chmod +x open_cti.sh
-```
-
-3. Run the installation script:
-```bash
-sudo ./open_cti.sh
-```
-
-## Installation Options
-
-The script supports several command-line options:
+The script provides several command-line options:
 
 ```bash
-Usage: ./open_cti.sh [options]
-Options:
-  -h, --help                 Show this help message and exit
-  -d, --directory <path>     Specify the installation directory (default: /opt/opencti)
-  -s, --skip-docker         Skip Docker and Docker Compose installation
-  -e, --env-only            Only generate the .env file, skip installation steps
+# Clone all connectors
+python opencti_ecosystem.py
+
+# Update existing connectors
+python opencti_ecosystem.py --update
+
+# List available connectors
+python opencti_ecosystem.py --list
+
+# Start the ecosystem (starts all connectors)
+python opencti_ecosystem.py --start
+
+# Stop the ecosystem (stops all connectors)
+python opencti_ecosystem.py --stop
+
+# Configure API keys for connectors
+python opencti_ecosystem.py --configure
+
+# Set up common configuration values
+python opencti_ecosystem.py --setup-common
 ```
 
-## What Gets Installed
+## Directory Structure
 
-The script will install and configure:
-
-1. **Docker and Docker Compose** (unless skipped with -s)
-   - Docker Compose V2 will be installed if an older version is detected
-2. **OpenCTI Platform** (version 5.12.5)
-3. **Required Services**:
-   - Redis 6.2
-   - Elasticsearch 7.17.9
-   - MinIO (latest stable)
-   - RabbitMQ 3.11
+The script creates the following structure:
+```
+opencti-ecosystem/
+├── connectors/
+│   ├── opencti-connector-import-file-yara/
+│   ├── opencti-connector-import-document/
+│   ├── opencti-connector-export-file-csv/
+│   └── ... (other connectors)
+│   └── docker-compose.master.yml
+├── opencti_config.json
+└── opencti_common_config.json
+```
 
 ## Configuration
 
-### Environment Variables
+### Basic Configuration
 
-The script automatically generates a `.env` file with the following default settings:
+The script creates a `opencti_config.json` file that stores:
+- List of repositories to clone
+- Installation paths
+- Connector preferences
 
-- Admin Email: admin@opencti.io
-- Admin Password: ChangeMePlease
-- Base URL: http://localhost:8080
-- All other required tokens and credentials are automatically generated
+You can modify this file to:
+- Enable/disable specific connectors
+- Change installation paths
+- Customize connector settings
 
-### Service Configurations
+### Common Configuration
 
-1. **Redis**:
-   - Persistent storage enabled
-   - Health checks configured
+The script creates an `opencti_common_config.json` file that stores common configuration values used across all connectors:
 
-2. **Elasticsearch**:
-   - Single node configuration
-   - Memory settings optimized
-   - Thread pool queue size increased
-   - Security disabled for development
-
-3. **MinIO**:
-   - Console available on port 9001
-   - Persistent storage configured
-
-4. **RabbitMQ**:
-   - Management interface enabled
-   - Custom configuration for message size and timeouts
-   - Health checks configured
-
-## Accessing OpenCTI
-
-After installation:
-
-1. Open your browser and navigate to: http://localhost:8080
-2. Login with the default credentials:
-   - Email: admin@opencti.io
-   - Password: ChangeMePlease
-
-**Important**: Change the default password after your first login!
-
-## Service Management
-
-### Starting Services
-```bash
-cd /opt/opencti
-docker-compose up -d
+```json
+{
+    "opencti": {
+        "url": "http://opencti:8080",
+        "token": "your-token",
+        "user_id": "your-user-id",
+        "user_password": "your-password"
+    },
+    "redis": {
+        "hostname": "redis",
+        "port": 6379,
+        "password": "your-redis-password"
+    },
+    "rabbitmq": {
+        "hostname": "rabbitmq",
+        "port": 5672,
+        "username": "your-rabbitmq-username",
+        "password": "your-rabbitmq-password"
+    }
+}
 ```
 
-### Stopping Services
-```bash
-cd /opt/opencti
-docker-compose down
-```
+These values are used to automatically update all connector docker-compose files, replacing any "ChangeMe" values with the configured values.
 
-### Viewing Logs
-```bash
-cd /opt/opencti
-docker-compose logs -f
-```
+To set up common configuration values:
+1. Run `python opencti_ecosystem.py --setup-common`
+2. Enter the values when prompted
+3. The script will update all connector docker-compose files with these values
 
-## Health Checks
+### API Key Configuration
 
-All services include health checks that run every 30 seconds. You can monitor the health status using:
+Some connectors require API keys to function. The script handles these in two ways:
 
-```bash
-docker-compose ps
-```
+1. **Automatic Configuration During Clone**:
+   - When cloning a connector that requires API keys, the script will prompt for the required keys
+   - Keys are stored in the connector's `config.yml` file
 
-## Data Persistence
+2. **Manual Configuration**:
+   - Use `python opencti_ecosystem.py --configure` to set up API keys for existing connectors
+   - The script will prompt for each required API key
+   - Keys are stored securely in the connector's configuration
 
-All data is stored in Docker volumes:
-- `redis-data`: Redis data
-- `elasticsearch-data`: Elasticsearch indices
-- `minio-data`: MinIO object storage
-- `rabbitmq-data`: RabbitMQ data
-- `opencti-data`: OpenCTI application data
+Connectors that require API keys are marked with "(Requires API Key)" in the connector list.
 
-## Troubleshooting
+## Available Connectors
 
-### Common Issues
+The script supports various types of connectors:
 
-1. **Docker Compose Version Issues**:
-   - If you see "ContainerConfig" errors, ensure you're using Docker Compose V2
-   - The script will automatically upgrade Docker Compose if needed
-   - Manual upgrade: `sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose`
+### Import Connectors
+- File Import (YARA, Document, MISP, PDF, DOCX, XLSX)
+- External Import (CVE, MITRE ATT&CK, MITRE ATLAS, DISARM, CPE, MISP Feed, TAXII 2.0)
+- Additional External Import (Abuse SSL, Cyber Campaign Collection, CISA Known Exploited Vulnerabilities, CRT.sh, Ransomware.live, Valhalla)
 
-2. **Elasticsearch fails to start**:
-   - Check if `vm.max_map_count` is set correctly
-   - Verify available memory
-   - Check logs: `docker-compose logs elasticsearch`
+### Export Connectors
+- File Export (CSV, TXT, PDF, DOCX, XLSX)
+- Report Export (PDF)
+- TTPs File Navigator
 
-3. **Services not starting**:
-   - Check logs: `docker-compose logs`
-   - Verify all ports are available
-   - Check disk space
-   - Ensure Docker daemon is running: `sudo systemctl status docker`
+### Enrichment Connectors
+- DNSTwist
+- Google DNS
+- Data Hygiene
+- Tagger
+- YARA
 
-4. **Connection issues**:
-   - Verify all services are running: `docker-compose ps`
-   - Check service logs for specific errors
-   - Ensure no firewall is blocking the ports
-
-5. **Installation Directory Issues**:
-   - If you get "destination path already exists" error, the script will now automatically clean the directory
-   - To start fresh: `sudo rm -rf /opt/opencti/*` before running the script
-
-### Logs Location
-
-- Installation logs: `/var/log/opencti_install.log`
-- Service logs: `docker-compose logs [service-name]`
-
-## Security Considerations
-
-1. Change all default passwords after installation
-2. Configure proper firewall rules
-3. Enable SSL/TLS for production use
-4. Review and adjust security settings in Elasticsearch
-
-## Upgrading
-
-To upgrade OpenCTI:
-
-1. Stop the services:
-```bash
-cd /opt/opencti
-docker-compose down
-```
-
-2. Update the images in docker-compose.yml
-3. Pull new images:
-```bash
-docker-compose pull
-```
-
-4. Start services:
-```bash
-docker-compose up -d
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+### API Key Required Connectors
+- AbuseIPDB IP Blacklist
+- AlienVault
+- CrowdStrike
+- SOCPrime
+- Intezer Sandbox
+- IPInfo
+- IPQS
+- Shodan
+- URLScan
+- Google SecOps SIEM
+- CrowdStrike Endpoint Security
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Feel free to submit issues and enhancement requests! 

@@ -10,197 +10,165 @@ import argparse
 
 # OpenCTI Ecosystem Repositories
 REPOSITORIES = {
-    "opencti": {
-        "name": "OpenCTI Platform",
-        "url": "https://github.com/OpenCTI-Platform/opencti.git",
-        "branch": "master",
-        "required": True
-    },
-    "opencti-graphql": {
-        "name": "OpenCTI GraphQL API",
-        "url": "https://github.com/OpenCTI-Platform/opencti-graphql.git",
-        "branch": "master",
-        "required": True
-    },
-    "opencti-frontend": {
-        "name": "OpenCTI Frontend",
-        "url": "https://github.com/OpenCTI-Platform/opencti-frontend.git",
-        "branch": "master",
-        "required": True
-    },
-    "opencti-worker": {
-        "name": "OpenCTI Worker",
-        "url": "https://github.com/OpenCTI-Platform/opencti-worker.git",
-        "branch": "master",
-        "required": True
-    },
-    "opencti-connector-export-file-stix": {
-        "name": "Export File STIX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connector-export-file-stix.git",
-        "branch": "master",
-        "required": False
-    },
-    "opencti-connector-import-file-stix": {
-        "name": "Import File STIX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connector-import-file-stix.git",
-        "branch": "master",
-        "required": False
-    },
     "opencti-connector-import-file-yara": {
         "name": "Import File YARA Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-file-yara.git",
+        "branch": "master"
     },
     "opencti-connector-import-document": {
         "name": "Import Document Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-document.git",
+        "branch": "master"
     },
     "opencti-connector-export-file-csv": {
         "name": "Export File CSV Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-file-csv.git",
+        "branch": "master"
     },
     "opencti-connector-export-file-txt": {
         "name": "Export File TXT Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-file-txt.git",
+        "branch": "master"
     },
     "opencti-connector-import-file-misp": {
         "name": "Import File MISP Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-file-misp.git",
+        "branch": "master"
     },
     "opencti-connector-import-file-pdf": {
         "name": "Import File PDF Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-file-pdf.git",
+        "branch": "master"
     },
     "opencti-connector-import-file-docx": {
         "name": "Import File DOCX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-file-docx.git",
+        "branch": "master"
     },
     "opencti-connector-import-file-xlsx": {
         "name": "Import File XLSX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-file-xlsx.git",
+        "branch": "master"
     },
     "opencti-connector-export-file-pdf": {
         "name": "Export File PDF Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-file-pdf.git",
+        "branch": "master"
     },
     "opencti-connector-export-file-docx": {
         "name": "Export File DOCX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-file-docx.git",
+        "branch": "master"
     },
     "opencti-connector-export-file-xlsx": {
         "name": "Export File XLSX Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-file-xlsx.git",
+        "branch": "master"
     },
     "opencti-connector-export-report-pdf": {
         "name": "Export Report PDF Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-report-pdf.git",
+        "branch": "master"
     },
     "opencti-connector-export-ttps-file-navigator": {
         "name": "Export TTPs File Navigator Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-export-ttps-file-navigator.git",
+        "branch": "master"
     },
     "opencti-connector-import-document-ai": {
         "name": "Import Document AI Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-import-document-ai.git",
+        "branch": "master"
     },
     "opencti-connector-enrichment-dnstwist": {
         "name": "DNSTwist Enrichment Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-enrichment-dnstwist.git",
+        "branch": "master"
     },
     "opencti-connector-enrichment-google-dns": {
         "name": "Google DNS Enrichment Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-enrichment-google-dns.git",
+        "branch": "master"
     },
     "opencti-connector-enrichment-hygiene": {
         "name": "Data Hygiene Enrichment Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-enrichment-hygiene.git",
+        "branch": "master"
     },
     "opencti-connector-enrichment-tagger": {
         "name": "Tagger Enrichment Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-enrichment-tagger.git",
+        "branch": "master"
     },
     "opencti-connector-enrichment-yara": {
         "name": "YARA Enrichment Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-enrichment-yara.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-cve": {
         "name": "CVE External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-cve.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-mitre": {
         "name": "MITRE ATT&CK External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-mitre.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-mitre-atlas": {
         "name": "MITRE ATLAS External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-mitre-atlas.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-disarm": {
         "name": "DISARM Framework External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-disarm.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-cpe": {
         "name": "CPE External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-cpe.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-misp-feed": {
         "name": "MISP Feed External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-misp-feed.git",
+        "branch": "master"
     },
     "opencti-connector-external-import-taxii2": {
         "name": "TAXII 2.0 External Import Connector",
-        "url": "https://github.com/OpenCTI-Platform/connectors.git",
-        "branch": "master",
-        "required": False
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-taxii2.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-abuse-ssl": {
+        "name": "Abuse SSL External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-abuse-ssl.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-cyber-campaign-collection": {
+        "name": "Cyber Campaign Collection External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-cyber-campaign-collection.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-cisa-known-exploited-vulnerabilities": {
+        "name": "CISA Known Exploited Vulnerabilities External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-cisa-known-exploited-vulnerabilities.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-crtsh": {
+        "name": "CRT.sh External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-crtsh.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-ransomwarelive": {
+        "name": "Ransomware.live External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-ransomwarelive.git",
+        "branch": "master"
+    },
+    "opencti-connector-external-import-valhalla": {
+        "name": "Valhalla External Import Connector",
+        "url": "https://github.com/OpenCTI-Platform/connector-external-import-valhalla.git",
+        "branch": "master"
     }
 }
 
@@ -213,7 +181,6 @@ def setup_config() -> Dict:
     
     config = {
         "repositories": {repo: True for repo in REPOSITORIES.keys()},
-        "install_path": os.path.join(os.getcwd(), "opencti-ecosystem"),
         "connectors_path": os.path.join(os.getcwd(), "opencti-ecosystem", "connectors")
     }
     
@@ -222,83 +189,25 @@ def setup_config() -> Dict:
     
     return config
 
-def clone_repository(repo_name: str, repo_info: Dict, install_path: str, connectors_path: str) -> bool:
-    """Clone a single repository and copy to connectors folder if it's a connector."""
-    repo_path = os.path.join(install_path, repo_name)
+def clone_repository(repo_name: str, repo_info: Dict, connectors_path: str) -> bool:
+    """Clone a single repository directly to the connectors folder."""
+    connector_path = os.path.join(connectors_path, repo_name)
     
-    if os.path.exists(repo_path):
+    if os.path.exists(connector_path):
         print(f"Repository {repo_name} already exists. Skipping...")
         return True
     
     print(f"Cloning {repo_info['name']}...")
     try:
         subprocess.run(
-            ["git", "clone", "-b", repo_info["branch"], repo_info["url"], repo_path],
+            ["git", "clone", "-b", repo_info["branch"], repo_info["url"], connector_path],
             check=True,
             capture_output=True
         )
         print(f"Successfully cloned {repo_name}")
-
-        # If it's a connector, copy it to the connectors folder
-        if "connector" in repo_name:
-            connector_path = os.path.join(connectors_path, repo_name)
-            if not os.path.exists(connector_path):
-                os.makedirs(connector_path)
-            
-            # Copy only necessary files
-            for item in os.listdir(repo_path):
-                if item not in ['.git', '.github']:
-                    src = os.path.join(repo_path, item)
-                    dst = os.path.join(connector_path, item)
-                    if os.path.isdir(src):
-                        subprocess.run(["cp", "-r", src, dst], check=True)
-                    else:
-                        subprocess.run(["cp", src, dst], check=True)
-            print(f"Copied connector to {connector_path}")
-
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error cloning {repo_name}: {e.stderr.decode()}")
-        return False
-
-def update_repository(repo_path: str, connectors_path: str) -> bool:
-    """Update an existing repository and sync with connectors folder."""
-    if not os.path.exists(repo_path):
-        return False
-    
-    print(f"Updating repository at {repo_path}...")
-    try:
-        subprocess.run(
-            ["git", "pull"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True
-        )
-        print(f"Successfully updated {repo_path}")
-
-        # If it's a connector, update the connectors folder
-        repo_name = os.path.basename(repo_path)
-        if "connector" in repo_name:
-            connector_path = os.path.join(connectors_path, repo_name)
-            if os.path.exists(connector_path):
-                # Remove old files
-                subprocess.run(["rm", "-rf", connector_path], check=True)
-                os.makedirs(connector_path)
-                
-                # Copy updated files
-                for item in os.listdir(repo_path):
-                    if item not in ['.git', '.github']:
-                        src = os.path.join(repo_path, item)
-                        dst = os.path.join(connector_path, item)
-                        if os.path.isdir(src):
-                            subprocess.run(["cp", "-r", src, dst], check=True)
-                        else:
-                            subprocess.run(["cp", src, dst], check=True)
-                print(f"Updated connector in {connector_path}")
-
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error updating {repo_path}: {e.stderr.decode()}")
         return False
 
 def create_master_docker_compose(connectors_path: str) -> bool:
@@ -345,90 +254,32 @@ def create_master_docker_compose(connectors_path: str) -> bool:
         print(f"Error creating master docker-compose file: {str(e)}")
         return False
 
-def start_ecosystem(connectors_path: str) -> bool:
-    """Start the entire ecosystem using the master docker-compose file."""
-    master_compose_path = os.path.join(connectors_path, 'docker-compose.master.yml')
-    if not os.path.exists(master_compose_path):
-        print("Master docker-compose file not found. Creating it...")
-        if not create_master_docker_compose(connectors_path):
-            return False
-
-    print("Starting OpenCTI ecosystem...")
-    try:
-        subprocess.run(
-            ["docker-compose", "-f", master_compose_path, "up", "-d"],
-            cwd=connectors_path,
-            check=True,
-            capture_output=True
-        )
-        print("Successfully started OpenCTI ecosystem")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error starting ecosystem: {e.stderr.decode()}")
-        return False
-
-def stop_ecosystem(connectors_path: str) -> bool:
-    """Stop the entire ecosystem using the master docker-compose file."""
-    master_compose_path = os.path.join(connectors_path, 'docker-compose.master.yml')
-    if not os.path.exists(master_compose_path):
-        print("Master docker-compose file not found.")
-        return False
-
-    print("Stopping OpenCTI ecosystem...")
-    try:
-        subprocess.run(
-            ["docker-compose", "-f", master_compose_path, "down"],
-            cwd=connectors_path,
-            check=True,
-            capture_output=True
-        )
-        print("Successfully stopped OpenCTI ecosystem")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error stopping ecosystem: {e.stderr.decode()}")
-        return False
-
 def main():
     parser = argparse.ArgumentParser(description="OpenCTI Ecosystem Manager")
-    parser.add_argument("--update", action="store_true", help="Update existing repositories")
     parser.add_argument("--list", action="store_true", help="List available repositories")
-    parser.add_argument("--start", action="store_true", help="Start the ecosystem")
-    parser.add_argument("--stop", action="store_true", help="Stop the ecosystem")
     args = parser.parse_args()
 
     config = setup_config()
-    install_path = config["install_path"]
     connectors_path = config["connectors_path"]
 
     if args.list:
         print("\nAvailable OpenCTI Ecosystem Repositories:")
         for repo_name, repo_info in REPOSITORIES.items():
-            status = "Required" if repo_info["required"] else "Optional"
-            print(f"- {repo_info['name']} ({repo_name}) [{status}]")
+            print(f"- {repo_info['name']} ({repo_name})")
         return
 
-    if not os.path.exists(install_path):
-        os.makedirs(install_path)
     if not os.path.exists(connectors_path):
         os.makedirs(connectors_path)
 
-    if args.update:
-        print("Updating existing repositories...")
-        for repo_name in config["repositories"]:
-            if config["repositories"][repo_name]:
-                repo_path = os.path.join(install_path, repo_name)
-                update_repository(repo_path, connectors_path)
-    elif args.start:
-        start_ecosystem(connectors_path)
-    elif args.stop:
-        stop_ecosystem(connectors_path)
-    else:
-        print("Cloning selected repositories...")
-        for repo_name, repo_info in REPOSITORIES.items():
-            if config["repositories"][repo_name]:
-                clone_repository(repo_name, repo_info, install_path, connectors_path)
-        # Create master docker-compose after cloning
-        create_master_docker_compose(connectors_path)
+    print("Cloning selected repositories...")
+    for repo_name, repo_info in REPOSITORIES.items():
+        if config["repositories"][repo_name]:
+            clone_repository(repo_name, repo_info, connectors_path)
+    
+    # Create master docker-compose after cloning
+    create_master_docker_compose(connectors_path)
+    print("\nSetup complete! You can now configure each connector manually.")
+    print(f"Master docker-compose file created at: {os.path.join(connectors_path, 'docker-compose.master.yml')}")
 
 if __name__ == "__main__":
     main() 
